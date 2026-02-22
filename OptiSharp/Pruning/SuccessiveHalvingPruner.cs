@@ -20,8 +20,8 @@ public sealed class SuccessiveHalvingPruner : IPruner
 
     public bool ShouldPrune(Trial trial, IReadOnlyList<Trial> trials)
     {
-        // Only prune completed or pruned trials
-        if (trial.State == TrialState.Running)
+        // Only prune running trials; completed/pruned trials can't be stopped
+        if (trial.State != TrialState.Running)
             return false;
 
         var intermediates = trial.IntermediateValues;
@@ -54,6 +54,10 @@ public sealed class SuccessiveHalvingPruner : IPruner
                 trialsAtRung.Add((other.Number, value));
             }
         }
+
+        // Also include the current running trial at rungResource for comparison
+        if (intermediates.TryGetValue(rungResource, out var currentValue))
+            trialsAtRung.Add((trial.Number, currentValue));
 
         if (trialsAtRung.Count == 0)
             return false;

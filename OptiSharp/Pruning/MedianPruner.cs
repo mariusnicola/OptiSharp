@@ -16,8 +16,8 @@ public sealed class MedianPruner : IPruner
 
     public bool ShouldPrune(Trial trial, IReadOnlyList<Trial> trials)
     {
-        // Only prune completed or pruned trials (they're asking for history)
-        if (trial.State == TrialState.Running)
+        // Only prune running trials; completed/pruned trials can't be stopped
+        if (trial.State != TrialState.Running)
             return false;
 
         var intermediates = trial.IntermediateValues;

@@ -58,3 +58,6 @@ ehthumbs.db
 Desktop.ini
 .DS_Store
 .temp
+dotnet-install.ps1
+memory.md
+OptiSharp.Benchmarks/python/__pycache__/objectives.cpython-311.pyc

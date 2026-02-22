@@ -95,35 +95,55 @@ public class PruningTests
     [Fact]
     public void MedianPruner_SkipsWarmupPhase()
     {
-        var config = new MedianPrunerConfig { NWarmupSteps = 2 };
+        var config = new MedianPrunerConfig { NStartupTrials = 5, NWarmupSteps = 2 };
         var pruner = new MedianPruner(config);
 
-        var trial = new Trial(0, new Dictionary<string, object> { ["x"] = 5.0 })
+        // 5 completed background trials with value at step 2
+        var completedTrials = new List<Trial>();
+        for (int i = 0; i < 5; i++)
         {
-            State = TrialState.Complete
-        };
-        trial.Report(1.0, 1);
-        trial.Report(0.8, 2); // Still in warmup
+            var t = new Trial(i, new Dictionary<string, object> { ["x"] = (double)i })
+            {
+                State = TrialState.Complete,
+                Value = 1.0
+            };
+            t.Report(1.0, 2);
+            completedTrials.Add(t);
+        }
 
-        // Should not prune during warmup
-        Assert.False(pruner.ShouldPrune(trial, [trial]));
+        // Running trial at step 2 (still in warmup: 2 <= 2), much worse value
+        var runningTrial = new Trial(5, new Dictionary<string, object> { ["x"] = 5.0 });
+        runningTrial.Report(100.0, 2);
+
+        var allTrials = completedTrials.Concat(new[] { runningTrial }).ToList();
+        Assert.False(pruner.ShouldPrune(runningTrial, allTrials));
     }
 
     [Fact]
     public void MedianPruner_ChecksIntervalSteps()
     {
-        var config = new MedianPrunerConfig { IntervalSteps = 2 };
+        var config = new MedianPrunerConfig { NStartupTrials = 5, IntervalSteps = 2 };
         var pruner = new MedianPruner(config);
 
-        var trial = new Trial(0, new Dictionary<string, object> { ["x"] = 5.0 })
+        // 5 completed background trials with value at step 3
+        var completedTrials = new List<Trial>();
+        for (int i = 0; i < 5; i++)
         {
-            State = TrialState.Complete
-        };
-        trial.Report(1.0, 1); // Not at interval
-        trial.Report(0.8, 2); // At interval
+            var t = new Trial(i, new Dictionary<string, object> { ["x"] = (double)i })
+            {
+                State = TrialState.Complete,
+                Value = 1.0
+            };
+            t.Report(1.0, 3);
+            completedTrials.Add(t);
+        }
 
-        // Should only check at intervals
-        Assert.False(pruner.ShouldPrune(trial, [trial]));
+        // Running trial at step 3 (not at interval: 3 % 2 != 0), much worse value
+        var runningTrial = new Trial(5, new Dictionary<string, object> { ["x"] = 5.0 });
+        runningTrial.Report(100.0, 3);
+
+        var allTrials = completedTrials.Concat(new[] { runningTrial }).ToList();
+        Assert.False(pruner.ShouldPrune(runningTrial, allTrials));
     }
 
     [Fact]
@@ -153,24 +173,31 @@ public class PruningTests
         var config = new SuccessiveHalvingPrunerConfig { MinResource = 1, ReductionFactor = 2.0 };
         var pruner = new SuccessiveHalvingPruner(config);
 
-        var trials = Enumerable.Range(0, 4)
+        // 3 completed background trials
+        var completedTrials = Enumerable.Range(0, 3)
             .Select(i =>
             {
-                var t = new Trial(i, new Dictionary<string, object> { ["x"] = i })
+                var t = new Trial(i, new Dictionary<string, object> { ["x"] = (double)i })
                 {
-                    State = TrialState.Complete
+                    State = TrialState.Complete,
+                    Value = i * 0.5
                 };
                 t.Report(i * 0.5, 1);
                 return t;
             })
             .ToList();
 
-        // Bottom half should be pruned
-        var bottom = trials[3];
-        Assert.True(pruner.ShouldPrune(bottom, trials));
+        // Running trial with worst value → should be pruned
+        var bottom = new Trial(3, new Dictionary<string, object> { ["x"] = 3.0 });
+        bottom.Report(1.5, 1);
+        var allTrialsWithBottom = completedTrials.Concat(new[] { bottom }).ToList();
+        Assert.True(pruner.ShouldPrune(bottom, allTrialsWithBottom));
 
-        var top = trials[0];
-        Assert.False(pruner.ShouldPrune(top, trials));
+        // Running trial with best value → should NOT be pruned
+        var top = new Trial(4, new Dictionary<string, object> { ["x"] = 0.0 });
+        top.Report(0.0, 1);
+        var allTrialsWithTop = completedTrials.Concat(new[] { top }).ToList();
+        Assert.False(pruner.ShouldPrune(top, allTrialsWithTop));
     }
 
     [Fact]
@@ -257,5 +284,328 @@ public class PruningTests
         // When checking if t2 should be pruned, pruner sees all trials
         var shouldPrune = study.ShouldPrune(t2);
         Assert.False(shouldPrune); // NopPruner never prunes
+    }
+
+    // --- Running-state pruning tests (benchmark scenario) ---
+
+    [Fact]
+    public void MedianPruner_PrunesRunningTrial_WhenWorseThanMedian()
+    {
+        var pruner = new MedianPruner(); // default: NStartupTrials=5, NWarmupSteps=0, IntervalSteps=1
+
+        var completedTrials = new List<Trial>();
+        for (int i = 0; i < 5; i++)
+        {
+            var t = new Trial(i, new Dictionary<string, object> { ["x"] = (double)i })
+            {
+                State = TrialState.Complete,
+                Value = 1.0 + i * 0.1
+            };
+            t.Report(1.0 + i * 0.1, 3);
+            completedTrials.Add(t);
+        }
+
+        // Running trial with much worse value at same step
+        var runningTrial = new Trial(5, new Dictionary<string, object> { ["x"] = 5.0 });
+        runningTrial.Report(100.0, 3);
+
+        var allTrials = completedTrials.Concat(new[] { runningTrial }).ToList();
+        Assert.True(pruner.ShouldPrune(runningTrial, allTrials));
+    }
+
+    [Fact]
+    public void MedianPruner_DoesNotPrune_RunningTrial_WhenBetterThanMedian()
+    {
+        var pruner = new MedianPruner();
+
+        var completedTrials = new List<Trial>();
+        for (int i = 0; i < 5; i++)
+        {
+            var t = new Trial(i, new Dictionary<string, object> { ["x"] = (double)i })
+            {
+                State = TrialState.Complete,
+                Value = 10.0 + i
+            };
+            t.Report(10.0 + i, 3);
+            completedTrials.Add(t);
+        }
+
+        // Running trial with value well below median
+        var runningTrial = new Trial(5, new Dictionary<string, object> { ["x"] = 5.0 });
+        runningTrial.Report(0.5, 3);
+
+        var allTrials = completedTrials.Concat(new[] { runningTrial }).ToList();
+        Assert.False(pruner.ShouldPrune(runningTrial, allTrials));
+    }
+
+    [Fact]
+    public void MedianPruner_DoesNotPrune_RunningTrial_InsufficientHistory()
+    {
+        var pruner = new MedianPruner(); // NStartupTrials = 5
+
+        // Only 3 completed trials (< 5)
+        var completedTrials = new List<Trial>();
+        for (int i = 0; i < 3; i++)
+        {
+            var t = new Trial(i, new Dictionary<string, object> { ["x"] = (double)i })
+            {
+                State = TrialState.Complete,
+                Value = 1.0
+            };
+            t.Report(1.0, 3);
+            completedTrials.Add(t);
+        }
+
+        var runningTrial = new Trial(3, new Dictionary<string, object> { ["x"] = 5.0 });
+        runningTrial.Report(100.0, 3);
+
+        var allTrials = completedTrials.Concat(new[] { runningTrial }).ToList();
+        Assert.False(pruner.ShouldPrune(runningTrial, allTrials));
+    }
+
+    [Fact]
+    public void MedianPruner_DoesNotPrune_RunningTrial_DuringWarmup()
+    {
+        var config = new MedianPrunerConfig { NStartupTrials = 5, NWarmupSteps = 5 };
+        var pruner = new MedianPruner(config);
+
+        var completedTrials = new List<Trial>();
+        for (int i = 0; i < 5; i++)
+        {
+            var t = new Trial(i, new Dictionary<string, object> { ["x"] = (double)i })
+            {
+                State = TrialState.Complete,
+                Value = 1.0
+            };
+            t.Report(1.0, 3);
+            completedTrials.Add(t);
+        }
+
+        // Running trial at step 3 which is within warmup (<= 5)
+        var runningTrial = new Trial(5, new Dictionary<string, object> { ["x"] = 5.0 });
+        runningTrial.Report(100.0, 3);
+
+        var allTrials = completedTrials.Concat(new[] { runningTrial }).ToList();
+        Assert.False(pruner.ShouldPrune(runningTrial, allTrials));
+    }
+
+    [Fact]
+    public void MedianPruner_BenchmarkScenario_ActuallyPrunes()
+    {
+        var space = CreateSimpleSpace();
+        var pruner = new MedianPruner(new MedianPrunerConfig { NStartupTrials = 5 });
+        using var study = new Study("test", new Samplers.RandomSampler(42), space, StudyDirection.Minimize, pruner);
+
+        int prunedCount = 0;
+        int totalTrials = 30;
+
+        for (int i = 0; i < totalTrials; i++)
+        {
+            var trial = study.Ask();
+            var x = Convert.ToDouble(trial.Parameters["x"]);
+            double value = x * x;
+
+            bool wasPruned = false;
+            for (int step = 1; step <= 10; step++)
+            {
+                var rng = new Random(42 ^ trial.Number ^ step);
+                double noise = rng.NextDouble();
+                double intermediate = value * (1 + (10 - step) * 0.5 * noise);
+                trial.Report(intermediate, step);
+
+                if (study.ShouldPrune(trial))
+                {
+                    study.Tell(trial.Number, TrialState.Pruned);
+                    prunedCount++;
+                    wasPruned = true;
+                    break;
+                }
+            }
+
+            if (!wasPruned)
+                study.Tell(trial.Number, value);
+        }
+
+        Assert.True(prunedCount > 0, $"Expected some trials to be pruned, but prunedCount was {prunedCount}");
+    }
+
+    [Fact]
+    public void PercentilePruner_PrunesRunningTrial_WhenWorseThanPercentile()
+    {
+        var config = new PercentilePrunerConfig { Percentile = 50.0 };
+        var pruner = new PercentilePruner(config);
+
+        var completedTrials = new List<Trial>();
+        for (int i = 0; i < 5; i++)
+        {
+            var t = new Trial(i, new Dictionary<string, object> { ["x"] = (double)i })
+            {
+                State = TrialState.Complete,
+                Value = 1.0 + i * 0.1
+            };
+            t.Report(1.0 + i * 0.1, 3);
+            completedTrials.Add(t);
+        }
+
+        var runningTrial = new Trial(5, new Dictionary<string, object> { ["x"] = 5.0 });
+        runningTrial.Report(100.0, 3);
+
+        var allTrials = completedTrials.Concat(new[] { runningTrial }).ToList();
+        Assert.True(pruner.ShouldPrune(runningTrial, allTrials));
+    }
+
+    [Fact]
+    public void PercentilePruner_BenchmarkScenario_ActuallyPrunes()
+    {
+        var space = CreateSimpleSpace();
+        var pruner = new PercentilePruner(new PercentilePrunerConfig { Percentile = 50.0, NStartupTrials = 5 });
+        using var study = new Study("test", new Samplers.RandomSampler(42), space, StudyDirection.Minimize, pruner);
+
+        int prunedCount = 0;
+        for (int i = 0; i < 30; i++)
+        {
+            var trial = study.Ask();
+            var x = Convert.ToDouble(trial.Parameters["x"]);
+            double value = x * x;
+
+            bool wasPruned = false;
+            for (int step = 1; step <= 10; step++)
+            {
+                var rng = new Random(42 ^ trial.Number ^ step);
+                double noise = rng.NextDouble();
+                double intermediate = value * (1 + (10 - step) * 0.5 * noise);
+                trial.Report(intermediate, step);
+
+                if (study.ShouldPrune(trial))
+                {
+                    study.Tell(trial.Number, TrialState.Pruned);
+                    prunedCount++;
+                    wasPruned = true;
+                    break;
+                }
+            }
+
+            if (!wasPruned)
+                study.Tell(trial.Number, value);
+        }
+
+        Assert.True(prunedCount > 0, $"Expected some trials to be pruned, but prunedCount was {prunedCount}");
+    }
+
+    [Fact]
+    public void SuccessiveHalvingPruner_PrunesRunningTrial_WhenLowerRanked()
+    {
+        var config = new SuccessiveHalvingPrunerConfig { MinResource = 1, ReductionFactor = 2.0 };
+        var pruner = new SuccessiveHalvingPruner(config);
+
+        // 3 completed background trials
+        var completedTrials = Enumerable.Range(0, 3)
+            .Select(i =>
+            {
+                var t = new Trial(i, new Dictionary<string, object> { ["x"] = (double)i })
+                {
+                    State = TrialState.Complete,
+                    Value = i * 0.5
+                };
+                t.Report(i * 0.5, 1);
+                return t;
+            })
+            .ToList();
+
+        // Running trial with worst value at same rung
+        var worstRunning = new Trial(3, new Dictionary<string, object> { ["x"] = 3.0 });
+        worstRunning.Report(1.5, 1);
+        var allTrials = completedTrials.Concat(new[] { worstRunning }).ToList();
+        Assert.True(pruner.ShouldPrune(worstRunning, allTrials));
+    }
+
+    [Fact]
+    public void SuccessiveHalvingPruner_BenchmarkScenario_ActuallyPrunes()
+    {
+        var space = CreateSimpleSpace();
+        var pruner = new SuccessiveHalvingPruner(new SuccessiveHalvingPrunerConfig { MinResource = 1, ReductionFactor = 3.0 });
+        using var study = new Study("test", new Samplers.RandomSampler(42), space, StudyDirection.Minimize, pruner);
+
+        int prunedCount = 0;
+        for (int i = 0; i < 30; i++)
+        {
+            var trial = study.Ask();
+            var x = Convert.ToDouble(trial.Parameters["x"]);
+            double value = x * x;
+
+            bool wasPruned = false;
+            for (int step = 1; step <= 10; step++)
+            {
+                var rng = new Random(42 ^ trial.Number ^ step);
+                double noise = rng.NextDouble();
+                double intermediate = value * (1 + (10 - step) * 0.5 * noise);
+                trial.Report(intermediate, step);
+
+                if (study.ShouldPrune(trial))
+                {
+                    study.Tell(trial.Number, TrialState.Pruned);
+                    prunedCount++;
+                    wasPruned = true;
+                    break;
+                }
+            }
+
+            if (!wasPruned)
+                study.Tell(trial.Number, value);
+        }
+
+        Assert.True(prunedCount > 0, $"Expected some trials to be pruned, but prunedCount was {prunedCount}");
+    }
+
+    [Fact]
+    public void Study_PruningWorkflow_ActuallyPrunes()
+    {
+        var space = CreateSimpleSpace();
+        var pruner = new MedianPruner(new MedianPrunerConfig { NStartupTrials = 5 });
+        using var study = Optimizer.CreateStudy("test", space, pruner: pruner);
+
+        int prunedCount = 0;
+        int completedCount = 0;
+
+        for (int i = 0; i < 30; i++)
+        {
+            var trial = study.Ask();
+            var x = Convert.ToDouble(trial.Parameters["x"]);
+            double value = x * x;
+
+            bool wasPruned = false;
+            for (int step = 1; step <= 10; step++)
+            {
+                var rng = new Random(42 ^ trial.Number ^ step);
+                double noise = rng.NextDouble();
+                double intermediate = value * (1 + (10 - step) * 0.5 * noise);
+                trial.Report(intermediate, step);
+
+                if (study.ShouldPrune(trial))
+                {
+                    study.Tell(trial.Number, TrialState.Pruned);
+                    prunedCount++;
+                    wasPruned = true;
+                    break;
+                }
+            }
+
+            if (!wasPruned)
+            {
+                study.Tell(trial.Number, value);
+                completedCount++;
+            }
+        }
+
+        Assert.True(prunedCount > 0, $"Expected some trials to be pruned, but prunedCount was {prunedCount}");
+        Assert.True(completedCount > 0, "Expected some trials to complete");
+
+        var best = study.BestTrial;
+        Assert.NotNull(best);
+        Assert.Equal(TrialState.Complete, best.State);
+
+        var trials = study.Trials;
+        Assert.Contains(trials, t => t.State == TrialState.Pruned);
+        Assert.Contains(trials, t => t.State == TrialState.Complete);
     }
 }
