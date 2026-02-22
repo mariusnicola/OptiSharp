@@ -1,0 +1,26 @@
+[
+  {
+    "PrunerName": "NopPruner",
+    "TotalTrials": 100,
+    "PrunedCount": 0,
+    "PruningRate": 0,
+    "WallClockSeconds": 0.0517122,
+    "BestValue": 0.024863952701017617
+  },
+  {
+    "PrunerName": "MedianPruner",
+    "TotalTrials": 100,
+    "PrunedCount": 0,
+    "PruningRate": 0,
+    "WallClockSeconds": 0.0574362,
+    "BestValue": 0.024863952701017617
+  },
+  {
+    "PrunerName": "PercentilePruner",
+    "TotalTrials": 100,
+    "PrunedCount": 0,
+    "PruningRate": 0,
+    "WallClockSeconds": 0.0496586,
+    "BestValue": 0.024863952701017617
+  }
+]

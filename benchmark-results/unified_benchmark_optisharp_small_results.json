@@ -1,0 +1,46 @@
+[
+  {
+    "Feature": "SingleObjective",
+    "Sampler": "TPE",
+    "Scale": "Small",
+    "NTrials": 500,
+    "NParameters": 20,
+    "BestValue": 46.23286378444043,
+    "ParetoFrontSize": 0,
+    "WallClockSeconds": 3.3188255,
+    "TrialsPerSecond": 150.65570636359158
+  },
+  {
+    "Feature": "MultiObjective",
+    "Sampler": "TPE",
+    "Scale": "Small",
+    "NTrials": 500,
+    "NParameters": 20,
+    "BestValue": 0,
+    "ParetoFrontSize": 3,
+    "WallClockSeconds": 2.9431684,
+    "TrialsPerSecond": 169.88494440209402
+  },
+  {
+    "Feature": "Constraints",
+    "Sampler": "TPE",
+    "Scale": "Small",
+    "NTrials": 500,
+    "NParameters": 20,
+    "BestValue": 19.75623839163946,
+    "ParetoFrontSize": 0,
+    "WallClockSeconds": 2.9938643,
+    "TrialsPerSecond": 167.00823748090386
+  },
+  {
+    "Feature": "Pruning",
+    "Sampler": "TPE",
+    "Scale": "Small",
+    "NTrials": 500,
+    "NParameters": 20,
+    "BestValue": 46.23286378444043,
+    "ParetoFrontSize": 0,
+    "WallClockSeconds": 2.9759184,
+    "TrialsPerSecond": 168.0153595609342
+  }
+]

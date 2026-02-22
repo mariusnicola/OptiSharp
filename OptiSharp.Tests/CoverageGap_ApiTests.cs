@@ -184,8 +184,8 @@ public sealed class CoverageGap_ApiTests
         var space = new SearchSpace([new FloatRange("x", 0, 10)]);
         using var study = Optimizer.CreateStudy("test", space, config: new TpeSamplerConfig { Seed = 1 });
 
-        // Should not throw
-        study.TellBatch([]);
+        // Should not throw - explicitly typed to TrialResult
+        study.TellBatch(new List<TrialResult>());
         Assert.Empty(study.Trials);
     }
 

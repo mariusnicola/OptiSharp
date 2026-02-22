@@ -192,7 +192,7 @@ public sealed class CmaEsSampler : ISampler, IDisposable
             {
                 results.Add((trial.Value.Value, candidate));
             }
-            else if (trial.State is TrialState.Fail)
+            else if (trial.State is TrialState.Fail or TrialState.Pruned)
             {
                 var worstValue = direction == StudyDirection.Minimize ? double.MaxValue : double.MinValue;
                 results.Add((worstValue, candidate));

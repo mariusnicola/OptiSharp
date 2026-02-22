@@ -1,0 +1,110 @@
+[
+  {
+    "Feature": "SingleObjective-TPE",
+    "Scale": "Tiny",
+    "NTrials": 100,
+    "NParameters": 10,
+    "BestValue": 15.498149783595917,
+    "WallClockSeconds": 0.2466909,
+    "TrialsPerSecond": 405.36558097603114
+  },
+  {
+    "Feature": "SingleObjective-Random",
+    "Scale": "Tiny",
+    "NTrials": 100,
+    "NParameters": 10,
+    "BestValue": 26.761463688833942,
+    "WallClockSeconds": 0.0006366,
+    "TrialsPerSecond": 157084.51146716936
+  },
+  {
+    "Feature": "SingleObjective-CMA-ES",
+    "Scale": "Tiny",
+    "NTrials": 100,
+    "NParameters": 10,
+    "BestValue": 4.41441559891515,
+    "WallClockSeconds": 0.0506479,
+    "TrialsPerSecond": 1974.415523644613
+  },
+  {
+    "Feature": "MultiObjective",
+    "Scale": "Tiny",
+    "NTrials": 100,
+    "NParameters": 10,
+    "BestValue": 2,
+    "WallClockSeconds": 0.0993459,
+    "TrialsPerSecond": 1006.5840663781796
+  },
+  {
+    "Feature": "Constraints",
+    "Scale": "Tiny",
+    "NTrials": 100,
+    "NParameters": 10,
+    "BestValue": 0.24,
+    "WallClockSeconds": 0.1025501,
+    "TrialsPerSecond": 975.1331300505801
+  },
+  {
+    "Feature": "Pruning",
+    "Scale": "Tiny",
+    "NTrials": 100,
+    "NParameters": 10,
+    "BestValue": 0,
+    "WallClockSeconds": 0.0961279,
+    "TrialsPerSecond": 1040.2807093466101
+  },
+  {
+    "Feature": "SingleObjective-TPE",
+    "Scale": "Small",
+    "NTrials": 1000,
+    "NParameters": 50,
+    "BestValue": 181.46891108440596,
+    "WallClockSeconds": 15.549013,
+    "TrialsPerSecond": 64.31276377478108
+  },
+  {
+    "Feature": "SingleObjective-Random",
+    "Scale": "Small",
+    "NTrials": 1000,
+    "NParameters": 50,
+    "BestValue": 270.96288997097815,
+    "WallClockSeconds": 0.003593,
+    "TrialsPerSecond": 278318.9535207348
+  },
+  {
+    "Feature": "SingleObjective-CMA-ES",
+    "Scale": "Small",
+    "NTrials": 1000,
+    "NParameters": 50,
+    "BestValue": 7.8656761958179455,
+    "WallClockSeconds": 0.1343802,
+    "TrialsPerSecond": 7441.57249356676
+  },
+  {
+    "Feature": "MultiObjective",
+    "Scale": "Small",
+    "NTrials": 1000,
+    "NParameters": 50,
+    "BestValue": 6,
+    "WallClockSeconds": 15.8065244,
+    "TrialsPerSecond": 63.26501479351147
+  },
+  {
+    "Feature": "Constraints",
+    "Scale": "Small",
+    "NTrials": 1000,
+    "NParameters": 50,
+    "BestValue": 0.422,
+    "WallClockSeconds": 15.7330212,
+    "TrialsPerSecond": 63.560583011227365
+  },
+  {
+    "Feature": "Pruning",
+    "Scale": "Small",
+    "NTrials": 1000,
+    "NParameters": 50,
+    "BestValue": 0,
+    "WallClockSeconds": 15.7251567,
+    "TrialsPerSecond": 63.592371069981134
+  }
+]

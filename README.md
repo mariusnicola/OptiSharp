@@ -6,7 +6,7 @@
 
 A pure C# optimization library for .NET. No Python. No subprocess. No interop headaches.
 
-Three samplers (Random, TPE, CMA-ES), optional NVIDIA CUDA GPU acceleration, thread-safe ask/tell API for distributed workloads. Used in large-scale hyperparameter optimization for trading strategy discovery.
+Three samplers (Random, TPE, CMA-ES), multi-objective Pareto optimization, early stopping/pruning, constraint-aware optimization, study persistence, warm start, Population-Based Training, optional NVIDIA CUDA GPU acceleration, thread-safe ask/tell API for distributed workloads. Used in large-scale hyperparameter optimization for trading strategy discovery.
 
 Targets **.NET Standard 2.1** — works with .NET Core 3.0+, .NET 5/6/7/8/9, and Unity 2021+.
 
@@ -212,6 +212,517 @@ catch
     study.Tell(trial.Number, TrialState.Fail);
 }
 ```
+
+---
+
+## Multi-Objective Optimization
+
+Optimize multiple conflicting objectives simultaneously. OptiSharp computes the Pareto front — the set of
+solutions where no single objective can be improved without worsening another.
+
+```csharp
+using OptiSharp;
+using OptiSharp.Models;
+using OptiSharp.MultiObjective;
+
+// Two objectives: minimize latency, minimize memory usage
+var space = new SearchSpace([
+    new IntRange("num_layers", 1, 8),
+    new IntRange("hidden_size", 32, 512, Step: 32),
+    new FloatRange("dropout", 0.0, 0.5),
+    new CategoricalRange("activation", ["relu", "gelu", "tanh"])
+]);
+
+var directions = new[] { StudyDirection.Minimize, StudyDirection.Minimize };
+using var study = Optimizer.CreateStudy("latency_vs_memory", space, directions);
+
+for (int i = 0; i < 100; i++)
+{
+    var trial = study.Ask();
+
+    var (latencyMs, memoryMb) = EvaluateModel(trial.Parameters);
+
+    // Report both objectives as an array
+    study.Tell(trial.Number, new[] { latencyMs, memoryMb });
+}
+
+// Get the Pareto front — all non-dominated solutions
+var front = study.ParetoFront;
+Console.WriteLine($"Pareto front: {front.Count} solutions");
+
+foreach (var t in front)
+    Console.WriteLine($"  Trial {t.Number}: latency={t.Values![0]:F1}ms, memory={t.Values[1]:F0}MB");
+```
+
+### Batch reporting for multi-objective
+
+Use `MoTrialResult` when reporting multiple trials at once:
+
+```csharp
+using OptiSharp.MultiObjective;
+
+var batch = study.AskBatch(10);
+
+var results = batch.AsParallel().Select(trial =>
+{
+    var (latency, memory) = EvaluateModel(trial.Parameters);
+    return new MoTrialResult(trial.Number, new[] { latency, memory }, TrialState.Complete);
+}).ToList();
+
+study.TellBatch(results);
+```
+
+### Crowding distance — spread of Pareto front
+
+NSGA-II style crowding distance measures how isolated each solution is on the Pareto front.
+Boundary solutions get `PositiveInfinity`. Useful for filtering solutions that are too clustered:
+
+```csharp
+var front = study.ParetoFront;
+var distances = ParetoUtils.CrowdingDistances(front, directions);
+
+// Sort by diversity — most isolated solutions first
+var diverse = front.Zip(distances)
+    .OrderByDescending(pair => pair.Second)
+    .Select(pair => pair.First)
+    .ToList();
+```
+
+### Pareto dominance check
+
+```csharp
+var a = new[] { 1.0, 5.0 };  // Fast but memory-hungry
+var b = new[] { 2.0, 3.0 };  // Slower but leaner
+
+bool aWins = ParetoUtils.Dominates(a, b, directions);  // false — different trade-offs
+```
+
+### Mixed minimize/maximize
+
+```csharp
+// Maximize accuracy, minimize latency
+var directions = new[] { StudyDirection.Maximize, StudyDirection.Minimize };
+using var study = Optimizer.CreateStudy("accuracy_vs_latency", space, directions);
+
+var trial = study.Ask();
+study.Tell(trial.Number, new[] { 0.94, 12.5 });  // 94% accuracy, 12.5ms latency
+```
+
+---
+
+## Pruning / Early Stopping
+
+Prune unpromising trials mid-evaluation based on intermediate results. This is especially valuable
+for long training runs — stop a trial early if its progress is clearly worse than completed trials.
+
+### The pruning loop pattern
+
+```csharp
+using OptiSharp;
+using OptiSharp.Models;
+using OptiSharp.Pruning;
+
+var space = new SearchSpace([
+    new FloatRange("learning_rate", 1e-5, 1e-1, Log: true),
+    new IntRange("batch_size", 16, 256, Step: 16),
+    new CategoricalRange("optimizer", ["adam", "adamw", "sgd"])
+]);
+
+// Create study with a pruner
+using var study = Optimizer.CreateStudy("neural_net", space,
+    pruner: new MedianPruner());
+
+for (int i = 0; i < 100; i++)
+{
+    var trial = study.Ask();
+
+    for (int epoch = 1; epoch <= 50; epoch++)
+    {
+        var validationLoss = TrainOneEpoch(trial.Parameters, epoch);
+
+        // Report intermediate result for this step
+        trial.Report(validationLoss, epoch);
+
+        // Check if this trial should be pruned
+        if (study.ShouldPrune(trial))
+        {
+            study.Tell(trial.Number, TrialState.Pruned);
+            goto nextTrial;
+        }
+    }
+
+    var finalLoss = EvaluateFinal(trial.Parameters);
+    study.Tell(trial.Number, finalLoss);
+
+    nextTrial:;
+}
+
+var best = study.BestTrial!;  // BestTrial skips pruned trials
+Console.WriteLine($"Best loss: {best.Value:F6}");
+```
+
+### MedianPruner — prune trials below the median
+
+Prunes if the current intermediate value exceeds the median of completed trials at the same step.
+
+```csharp
+var pruner = new MedianPruner(new MedianPrunerConfig
+{
+    NStartupTrials = 5,    // Wait for 5 completed trials before pruning
+    NWarmupSteps = 3,      // Don't prune during the first 3 steps
+    IntervalSteps = 1      // Check every step
+});
+
+using var study = Optimizer.CreateStudy("experiment", space, pruner: pruner);
+```
+
+### PercentilePruner — custom threshold
+
+Prunes trials below an arbitrary percentile instead of the median:
+
+```csharp
+var pruner = new PercentilePruner(new PercentilePrunerConfig
+{
+    Percentile = 25.0,     // Prune bottom 25% — more aggressive than median
+    NStartupTrials = 5,
+    NWarmupSteps = 2
+});
+```
+
+### SuccessiveHalvingPruner — SHA algorithm
+
+Implements Asynchronous Successive Halving. At each "rung" (power-of-eta step boundary),
+only the top `1/eta` fraction of trials survive:
+
+```csharp
+var pruner = new SuccessiveHalvingPruner(new SuccessiveHalvingPrunerConfig
+{
+    MinResource = 1,          // Minimum steps before first rung check
+    ReductionFactor = 3.0     // Keep top 1/3 at each rung (eta=3)
+});
+```
+
+### Comparing pruner effectiveness
+
+```csharp
+// No pruning baseline
+using var noPruneStudy = Optimizer.CreateStudy("baseline", space, pruner: new NopPruner());
+
+// Median pruning
+using var medianStudy = Optimizer.CreateStudy("median", space, pruner: new MedianPruner());
+
+// 25th-percentile pruning (most aggressive)
+using var pctStudy = Optimizer.CreateStudy("percentile", space,
+    pruner: new PercentilePruner(new PercentilePrunerConfig { Percentile = 25.0 }));
+```
+
+---
+
+## Constraint-Aware Optimization
+
+Define hard constraints on top of your objective. Infeasible trials are automatically deprioritized
+by TPE — the sampler pushes them into the "bad" group regardless of their objective value.
+
+```csharp
+var space = new SearchSpace([
+    new CategoricalRange("instance_type", ["t3.medium", "m5.large", "c5.xlarge"]),
+    new IntRange("replicas", 1, 20),
+    new IntRange("memory_mb", 512, 8192, Step: 512)
+]);
+
+using var study = Optimizer.CreateStudy("infra_opt", space, StudyDirection.Minimize);
+
+// Constraints: negative = feasible, positive = infeasible
+study.SetConstraintFunc(trial =>
+{
+    var memory = (int)trial.Parameters["memory_mb"];
+    var replicas = (int)trial.Parameters["replicas"];
+
+    return new[]
+    {
+        memory * replicas - 32_000.0,   // Total memory must be <= 32 GB
+        replicas - 10.0                  // Replicas must be <= 10
+    };
+});
+
+for (int i = 0; i < 100; i++)
+{
+    var trial = study.Ask();
+    var result = RunLoadTest(trial.Parameters);
+
+    // Report objective even for infeasible trials — TPE uses this to learn
+    study.Tell(trial.Number, result.CostPerHour);
+}
+
+// Filter to feasible trials only
+var feasible = study.Trials.Where(study.IsFeasible).ToList();
+Console.WriteLine($"Feasible: {feasible.Count}/{study.Trials.Count}");
+Console.WriteLine($"Best feasible cost: {feasible.Min(t => t.Value):F2}/hr");
+```
+
+### Multiple constraints
+
+```csharp
+study.SetConstraintFunc(trial =>
+{
+    var x = (double)trial.Parameters["x"];
+    return new[]
+    {
+        x - 5.0,    // x <= 5  (feasible when <= 0)
+        -x + 1.0    // x >= 1  (feasible when <= 0)
+    };
+});
+```
+
+### IsFeasible check
+
+```csharp
+var trial = study.BestTrial;
+if (study.IsFeasible(trial))
+    Console.WriteLine("Best trial satisfies all constraints");
+```
+
+### Constraints + multi-objective
+
+```csharp
+var directions = new[] { StudyDirection.Minimize, StudyDirection.Maximize };
+using var study = Optimizer.CreateStudy("mo_constrained", space, directions);
+
+study.SetConstraintFunc(t => new[] { ComputeConstraint(t.Parameters) });
+
+var trial = study.Ask();
+study.Tell(trial.Number, new[] { cost, quality });  // Both ConstraintValues and Values populated
+```
+
+---
+
+## Study Persistence
+
+Save and load study state to disk. Resume optimization after restarts without losing trial history.
+
+### Save a study
+
+```csharp
+using var study = Optimizer.CreateStudy("my_experiment", space);
+
+// Run some trials...
+for (int i = 0; i < 50; i++)
+{
+    var trial = study.Ask();
+    study.Tell(trial.Number, Evaluate(trial.Parameters));
+}
+
+// Checkpoint to disk
+study.Save("my_experiment.json");
+Console.WriteLine($"Saved {study.Trials.Count(t => t.State == TrialState.Complete)} trials");
+```
+
+### Load and resume
+
+```csharp
+var space = new SearchSpace([
+    new FloatRange("x", 0, 10),
+    new IntRange("y", 1, 5)
+]);
+
+// Load resumes from saved state — all previous trials are pre-populated
+using var study = Study.Load("my_experiment.json", space, new Samplers.Tpe.TpeSampler());
+
+Console.WriteLine($"Resumed with {study.Trials.Count} prior trials");
+
+// Continue where you left off
+for (int i = 0; i < 50; i++)
+{
+    var trial = study.Ask();
+    study.Tell(trial.Number, Evaluate(trial.Parameters));
+}
+```
+
+### What is preserved
+
+| Data | Saved? |
+|------|--------|
+| Trial parameters (float, int, categorical) | Yes |
+| Objective value (`Value`) | Yes |
+| Multi-objective values (`Values[]`) | Yes |
+| Constraint values (`ConstraintValues[]`) | Yes |
+| Intermediate values (`IntermediateValues`) | Yes |
+| TrialState (Complete, Pruned) | Yes |
+| Running trials | No |
+| Failed trials | No |
+
+**Parameter types are fully reconstructed** from the SearchSpace — floats come back as `double`,
+ints as `int`, categoricals as `string`.
+
+### Periodic checkpointing
+
+```csharp
+for (int i = 0; i < 500; i++)
+{
+    var trial = study.Ask();
+    study.Tell(trial.Number, Evaluate(trial.Parameters));
+
+    // Checkpoint every 50 trials
+    if ((i + 1) % 50 == 0)
+        study.Save($"checkpoint_{i + 1}.json");
+}
+```
+
+---
+
+## Warm Start / Transfer Learning
+
+Pre-populate a study with results from a previous run. The sampler treats warm trials as real trial
+history — they count toward `NStartupTrials` and inform the first TPE/CMA-ES suggestions.
+
+### From a list of trials
+
+```csharp
+// Previous experiment results
+var warmTrials = new List<Trial>
+{
+    new Trial(0, new Dictionary<string, object> { ["lr"] = 0.01, ["layers"] = 3 })
+    {
+        State = TrialState.Complete,
+        Value = 0.42
+    },
+    new Trial(1, new Dictionary<string, object> { ["lr"] = 0.001, ["layers"] = 5 })
+    {
+        State = TrialState.Complete,
+        Value = 0.35
+    }
+};
+
+using var study = Optimizer.CreateStudy("new_experiment", space,
+    warmStartTrials: warmTrials);
+
+// Trial numbers are re-assigned from 0 — no gaps
+Console.WriteLine(study.Trials[0].Number);  // 0
+Console.WriteLine(study.Trials[1].Number);  // 1
+```
+
+### From an existing study
+
+Copy all completed trials from a previous study object:
+
+```csharp
+using var study1 = Optimizer.CreateStudy("experiment_v1", space);
+// ... run study1 ...
+
+// study2 inherits all of study1's completed trials
+using var study2 = Optimizer.CreateStudy("experiment_v2", space,
+    fromStudy: study1);
+
+Console.WriteLine($"Warm started with {study2.Trials.Count} trials from v1");
+```
+
+### Works with all factory methods
+
+```csharp
+// With CMA-ES
+using var cmaStudy = Optimizer.CreateStudyWithCmaEs("cma_warm", space,
+    warmStartTrials: previousTrials);
+
+// With Random sampler
+using var randStudy = Optimizer.CreateStudyWithRandomSampler("rand_warm", space,
+    warmStartTrials: previousTrials);
+```
+
+### Warm start counts toward startup phase
+
+With `NStartupTrials = 5` and 3 warm trials, TPE activates after only 2 more random trials:
+
+```csharp
+var config = new TpeSamplerConfig { NStartupTrials = 5 };
+using var study = Optimizer.CreateStudy("fast_start", space,
+    config: config,
+    warmStartTrials: previousTrials); // 3 trials already loaded
+// TPE activates after 2 more trials instead of 5
+```
+
+---
+
+## Population-Based Training
+
+PBT maintains a population of models training in parallel. At regular intervals, underperforming
+members copy hyperparameters from top performers and apply random perturbations — combining the
+exploitation of good configurations with exploration of nearby variants.
+
+`PopulationBasedTrainer` is a standalone coordinator, separate from `Study`.
+
+```csharp
+using OptiSharp;
+using OptiSharp.Models;
+using OptiSharp.Pbt;
+
+var space = new SearchSpace([
+    new FloatRange("lr", 1e-4, 1e-1),
+    new IntRange("batch_size", 16, 128),
+    new CategoricalRange("optimizer", new object[] { "adam", "sgd", "rmsprop" })
+]);
+
+var pbt = new PopulationBasedTrainer(
+    space,
+    populationSize: 10,
+    exploitFraction: 0.3,   // Bottom 30% will exploit top performers
+    perturbFactor: 0.2,     // 20% multiplicative perturbation on float/int params
+    seed: 42
+);
+
+// Generation 1 — initialize population with random hyperparameters
+var population = pbt.AskPopulation().ToList();
+
+for (int generation = 0; generation < 5; generation++)
+{
+    // Train each member, report performance
+    var updated = population.Select(member =>
+    {
+        var loss = Train(member.Parameters, steps: 100);
+        return pbt.Report(member, performance: -loss, step: (generation + 1) * 100);
+    }).ToList();
+
+    // Evolve: top 70% kept, bottom 30% exploit + explore
+    population = pbt.Evolve(updated);
+
+    var best = population.Max(m => m.Performance);
+    Console.WriteLine($"Generation {generation + 1}: best performance = {best:F4}");
+}
+
+// Inspect best member's parameter history across generations
+var bestMember = population.OrderByDescending(m => m.Performance).First();
+Console.WriteLine($"Parameter evolution ({bestMember.ParameterHistory.Count} snapshots):");
+foreach (var snapshot in bestMember.ParameterHistory)
+    Console.WriteLine($"  lr={snapshot["lr"]:G4}, batch={snapshot["batch_size"]}");
+```
+
+### PbtMember — immutable record
+
+`PbtMember` is an immutable record. `Report` and `Evolve` return new instances:
+
+```csharp
+var member = population[0];
+// member.Performance == double.NegativeInfinity initially
+
+var updated = pbt.Report(member, performance: 0.92, step: 100);
+// updated.Performance == 0.92, member is unchanged
+```
+
+### Constructor validation
+
+```csharp
+// These throw ArgumentException:
+new PopulationBasedTrainer(space, populationSize: 1);      // Must be >= 2
+new PopulationBasedTrainer(space, exploitFraction: 1.5);   // Must be in [0, 1]
+new PopulationBasedTrainer(space, perturbFactor: -0.1);    // Must be >= 0
+```
+
+### Perturbation behavior
+
+| Parameter type | Perturbation |
+|---|---|
+| `FloatRange` | Multiplicative: `value * (1 ± perturbFactor)`, clamped to `[Low, High]` |
+| `IntRange` | Same, rounded and clamped to `[Low, High]` |
+| `CategoricalRange` | 50% keep current value, 50% resample uniformly |
 
 ---
 
@@ -966,21 +1477,39 @@ Each `Study` instance is thread-safe. All public methods (`Ask`, `Tell`, `AskBat
 |--------|-------------|
 | `Ask()` | Get next suggested trial |
 | `Tell(number, value)` | Report successful evaluation |
+| `Tell(number, double[])` | Report multi-objective values |
 | `Tell(number, TrialState.Fail)` | Report failed evaluation |
+| `Tell(number, TrialState.Pruned)` | Report pruned trial |
 | `AskBatch(count)` | Get multiple trials at once |
 | `TellBatch(results)` | Report multiple results at once |
+| `TellBatch(MoTrialResult[])` | Report multi-objective batch results |
 | `BestTrial` | Best completed trial (null if none) |
+| `ParetoFront` | Non-dominated trials (multi-objective studies) |
+| `IsMultiObjective` | True if study has multiple objectives |
+| `Direction` | Primary study direction (first for multi-objective) |
+| `ShouldPrune(trial)` | Ask configured pruner if trial should stop |
+| `SetConstraintFunc(fn)` | Register constraint evaluation function |
+| `IsFeasible(trial)` | True if all constraint values ≤ 0 |
+| `Save(filePath)` | Serialize study to JSON |
+| `Study.Load(path, space, sampler)` | Restore study from JSON |
 | `Trials` | All trial history |
 | `Dispose()` | Clean up resources (GPU buffers, etc.) |
 
 ### Factory Methods (Optimizer class)
 
-| Method | Sampler |
-|--------|---------|
+| Method | Notes |
+|--------|-------|
 | `CreateStudy(name, space)` | TPE (default) |
+| `CreateStudy(name, space, direction)` | TPE with Maximize/Minimize |
+| `CreateStudy(name, space, StudyDirection[])` | Multi-objective |
 | `CreateStudy(name, space, config: tpeConfig)` | TPE with custom config |
+| `CreateStudy(name, space, pruner: pruner)` | With early stopping |
+| `CreateStudy(name, space, warmStartTrials: trials)` | Warm start from trial list |
+| `CreateStudy(name, space, fromStudy: study)` | Warm start from existing study |
 | `CreateStudyWithCmaEs(name, space, config: cmaConfig)` | CMA-ES |
+| `CreateStudyWithCmaEs(name, space, warmStartTrials:)` | CMA-ES + warm start |
 | `CreateStudyWithRandomSampler(name, space, seed: 42)` | Random |
+| `CreateStudyWithRandomSampler(name, space, warmStartTrials:)` | Random + warm start |
 | `CreateStudy(name, space, customSampler)` | Any ISampler |
 
 ### TpeSamplerConfig
@@ -1025,34 +1554,35 @@ Each `Study` instance is thread-safe. All public methods (`Ask`, `Tell`, `AskBat
 | GPU Acceleration | CUDA via ILGPU | No |
 | Thread-safe | Yes (built-in) | Partial |
 | Batch API | Yes | Yes (v3+) |
-| Storage Backend | In-memory | SQLite, PostgreSQL, etc. |
-| Pruning | No | Yes |
-| Multi-objective | No | Yes |
+| Storage Backend | JSON (Save/Load) + in-memory | SQLite, PostgreSQL, etc. |
+| Pruning | Yes (Median, Percentile, SHA) | Yes |
+| Multi-objective | Yes (Pareto front + crowding) | Yes |
+| Constraints | Yes (per-trial function) | Yes |
+| Warm Start | Yes (from trials or study) | Yes |
+| Population-Based Training | Yes (PopulationBasedTrainer) | No |
 | Visualization | No | Yes (plotly) |
 
-**What Optuna has that this doesn't:** Persistent storage, pruning (early stopping), multi-objective optimization, built-in visualization, dozens of samplers.
+**What Optuna has that this doesn't:** Built-in visualization, dozens of samplers, SQLite/PostgreSQL storage backends.
 
-**What this has that Optuna doesn't:** Native .NET, zero Python interop, GPU-accelerated CMA-ES, single-file deployment.
+**What this has that Optuna doesn't:** Native .NET, zero Python interop, GPU-accelerated CMA-ES, Population-Based Training, single-file deployment.
 
 ---
 
 ## Current Limitations
 
-Things OptiSharp does **not** support (yet):
+Things OptiSharp does **not** support:
 
-- **No persistent storage** — Studies are in-memory only. If the process exits, trial history is lost. Bring your own serialization if you need checkpointing.
-- **No pruning / early stopping** — Every trial runs to completion. You can't abort a trial mid-evaluation based on intermediate results.
-- **No multi-objective optimization** — Single scalar objective only. No Pareto frontiers.
 - **No conditional parameters** — All parameters are sampled independently. You can't express "only sample `dropout` if `use_dropout` is true."
-- **No parameter constraints** — No way to enforce `stop_loss < take_profit` or similar inter-parameter relationships. Handle this in your evaluation function (return `Fail` for invalid combinations).
+- **No parameter constraints at sampling time** — Constraints are evaluated after sampling. The sampler learns to avoid infeasible regions over time, but cannot enforce them structurally.
 - **No built-in visualization** — No trial plots, parameter importance, or optimization history charts.
 - **CMA-ES handles categoricals randomly** — CMA-ES only optimizes continuous parameters. Categorical parameters in a CMA-ES study are sampled uniformly at random, not learned.
+- **JSON storage only** — No SQLite, PostgreSQL, or other database backends.
 
 ---
 
 ## Validation & Benchmarks
 
-The test suite covers correctness, convergence, and performance across **165 tests** (151 always-run + 14 slow/load tests).
+The test suite covers correctness, convergence, and performance across **243+ tests**.
 
 ### Convergence
 

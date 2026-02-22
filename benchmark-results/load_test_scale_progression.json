@@ -1,0 +1,32 @@
+[
+  {
+    "Benchmark": "ScaleProgression",
+    "Library": "OptiSharp",
+    "Results": {
+      "1000": {
+        "NTrials": 1000,
+        "WallClockSeconds": 1.0979042,
+        "BestValue": -0.18727825162569756,
+        "TrialsPerSecond": 910.826281564457
+      },
+      "5000": {
+        "NTrials": 5000,
+        "WallClockSeconds": 7.6007043,
+        "BestValue": -0.20486155835211328,
+        "TrialsPerSecond": 657.8337746937477
+      },
+      "10000": {
+        "NTrials": 10000,
+        "WallClockSeconds": 20.5815517,
+        "BestValue": -0.20575654704917512,
+        "TrialsPerSecond": 485.87201517949694
+      },
+      "25000": {
+        "NTrials": 25000,
+        "WallClockSeconds": 87.5620988,
+        "BestValue": -0.20558454644231638,
+        "TrialsPerSecond": 285.51165792750504
+      }
+    }
+  }
+]

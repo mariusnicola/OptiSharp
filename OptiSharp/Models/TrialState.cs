@@ -7,5 +7,6 @@ public enum TrialState
 {
     Running,
     Complete,
-    Fail
+    Fail,
+    Pruned
 }

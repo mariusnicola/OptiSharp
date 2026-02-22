@@ -1,0 +1,13 @@
+[
+  {
+    "Benchmark": "HighDimensional",
+    "Library": "OptiSharp",
+    "NTrials": 1000,
+    "NParameters": 100,
+    "WallClockSeconds": 37.5464052,
+    "BestValue": 497.8252367634353,
+    "TrialsPerSecond": 26.63370819851483,
+    "MemoryMBStart": 0,
+    "MemoryMBPeak": 18
+  }
+]

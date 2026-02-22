@@ -213,9 +213,47 @@ public sealed class TpeSampler : ISampler
     private (List<Trial> Below, List<Trial> Above) SplitBelowAbove(
         List<Trial> sortedCompleted, IReadOnlyList<Trial> allTrials)
     {
-        var nBelow = Gamma(sortedCompleted.Count);
-        var belowTrials = sortedCompleted.GetRange(0, nBelow);
-        var aboveTrials = sortedCompleted.GetRange(nBelow, sortedCompleted.Count - nBelow);
+        // Separate feasible and infeasible trials (based on ConstraintValues)
+        var feasible = new List<Trial>();
+        var infeasible = new List<Trial>();
+
+        foreach (var trial in sortedCompleted)
+        {
+            if (IsFeasible(trial))
+                feasible.Add(trial);
+            else
+                infeasible.Add(trial);
+        }
+
+        List<Trial> belowTrials, aboveTrials;
+
+        if (feasible.Count >= _config.NStartupTrials)
+        {
+            // Enough feasible trials: use them for below/above split
+            var nBelow = Gamma(feasible.Count);
+            belowTrials = feasible.GetRange(0, nBelow);
+            aboveTrials = feasible.GetRange(nBelow, feasible.Count - nBelow);
+
+            // All infeasible trials go to above (penalize infeasibility)
+            aboveTrials.AddRange(infeasible);
+        }
+        else
+        {
+            // Insufficient feasible trials: sort all by violation magnitude
+            var allSorted = new List<(double Violation, Trial Trial)>();
+
+            foreach (var trial in sortedCompleted)
+            {
+                var violation = GetConstraintViolation(trial);
+                allSorted.Add((violation, trial));
+            }
+
+            allSorted.Sort((a, b) => a.Violation.CompareTo(b.Violation));
+
+            var nBelow = Gamma(allSorted.Count);
+            belowTrials = allSorted.GetRange(0, nBelow).Select(x => x.Trial).ToList();
+            aboveTrials = allSorted.GetRange(nBelow, allSorted.Count - nBelow).Select(x => x.Trial).ToList();
+        }
 
         // Constant liar: include running trials in above group
         if (_config.ConstantLiar)
@@ -249,6 +287,19 @@ public sealed class TpeSampler : ISampler
         }
 
         return (belowTrials, aboveTrials);
+    }
+
+    private bool IsFeasible(Trial trial)
+    {
+        return trial.ConstraintValues == null || trial.ConstraintValues.All(v => v <= 0.0);
+    }
+
+    private double GetConstraintViolation(Trial trial)
+    {
+        if (trial.ConstraintValues == null || trial.ConstraintValues.Length == 0)
+            return 0.0;
+
+        return trial.ConstraintValues.Sum(v => Math.Max(0.0, v));
     }
 
     // ========== BATCH OPTIMIZATION HELPERS ==========
