@@ -60,4 +60,11 @@ Desktop.ini
 .temp
 dotnet-install.ps1
 memory.md
-OptiSharp.Benchmarks/python/__pycache__/objectives.cpython-311.pyc
+
+## Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
