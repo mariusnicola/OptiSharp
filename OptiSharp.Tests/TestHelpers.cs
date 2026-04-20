@@ -27,7 +27,7 @@ internal static class TestHelpers
         for (var i = 0; i < 5; i++)
             ranges.Add(new IntRange($"i{i}", 0, 100));
         for (var i = 0; i < 2; i++)
-            ranges.Add(new CategoricalRange($"c{i}", ["a", "b", "c"]));
+            ranges.Add(new CategoricalRange($"c{i}", new[] { "a", "b", "c" }));
         return new SearchSpace(ranges);
     }
 

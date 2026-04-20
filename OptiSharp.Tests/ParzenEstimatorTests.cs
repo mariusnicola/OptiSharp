@@ -36,8 +36,8 @@ public sealed class ParzenEstimatorTests
         var obs = new double[] { 3.0, 7.0 };
         var est = new ParzenEstimator(obs, 0, 10, priorWeight: 0.1, considerMagicClip: true);
 
-        var pdfNear = est.LogPdf([3.0]);
-        var pdfFar = est.LogPdf([0.1]);
+        var pdfNear = est.LogPdf(new[] { 3.0 });
+        var pdfFar = est.LogPdf(new[] { 0.1 });
 
         Assert.True(pdfNear[0] > pdfFar[0]);
     }
@@ -49,7 +49,7 @@ public sealed class ParzenEstimatorTests
         var est = new ParzenEstimator(obs, 0, 10, priorWeight: 1.0, considerMagicClip: true);
 
         // Test points far from observations — prior should keep density > 0
-        var pdfs = est.LogPdf([0.1, 5.0, 9.9]);
+        var pdfs = est.LogPdf(new[] { 0.1, 5.0, 9.9 });
         foreach (var pdf in pdfs)
             Assert.True(pdf > double.NegativeInfinity);
     }
@@ -77,9 +77,9 @@ public sealed class ParzenEstimatorTests
         var obs = new double[] { 2.0, 8.0 };
         var est = new ParzenEstimator(obs, 0, 10, priorWeight: 0.1, considerMagicClip: true);
 
-        var pdf2 = est.LogPdf([2.0])[0];
-        var pdf5 = est.LogPdf([5.0])[0];
-        var pdf8 = est.LogPdf([8.0])[0];
+        var pdf2 = est.LogPdf(new[] { 2.0 })[0];
+        var pdf5 = est.LogPdf(new[] { 5.0 })[0];
+        var pdf8 = est.LogPdf(new[] { 8.0 })[0];
 
         // All should be finite (no NaN or -Inf)
         Assert.True(double.IsFinite(pdf2));

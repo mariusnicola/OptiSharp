@@ -5,13 +5,13 @@ namespace OptiSharp.Tests;
 
 public sealed class RandomSamplerTests
 {
-    private static readonly SearchSpace TestSpace = new([
+    private static readonly SearchSpace TestSpace = new(new ParameterRange[] {
         new IntRange("int_param", 1, 10),
         new IntRange("int_step", 0, 100, Step: 10),
         new FloatRange("float_param", 0.0, 1.0),
         new FloatRange("float_log", 0.001, 1.0, Log: true),
-        new CategoricalRange("cat_param", ["a", "b", "c"])
-    ]);
+        new CategoricalRange("cat_param", new[] { "a", "b", "c" })
+    });
 
     [Fact]
     public void Sample_IntRange_WithinBounds()
@@ -19,7 +19,7 @@ public sealed class RandomSamplerTests
         var sampler = new RandomSampler(seed: 42);
         for (var i = 0; i < 100; i++)
         {
-            var result = sampler.Sample([], StudyDirection.Minimize, TestSpace);
+            var result = sampler.Sample(new List<Trial>(), StudyDirection.Minimize, TestSpace);
             var val = (int)result["int_param"];
             Assert.InRange(val, 1, 10);
         }
@@ -31,7 +31,7 @@ public sealed class RandomSamplerTests
         var sampler = new RandomSampler(seed: 42);
         for (var i = 0; i < 100; i++)
         {
-            var result = sampler.Sample([], StudyDirection.Minimize, TestSpace);
+            var result = sampler.Sample(new List<Trial>(), StudyDirection.Minimize, TestSpace);
             var val = (int)result["int_step"];
             Assert.Equal(0, val % 10);
             Assert.InRange(val, 0, 100);
@@ -44,7 +44,7 @@ public sealed class RandomSamplerTests
         var sampler = new RandomSampler(seed: 42);
         for (var i = 0; i < 100; i++)
         {
-            var result = sampler.Sample([], StudyDirection.Minimize, TestSpace);
+            var result = sampler.Sample(new List<Trial>(), StudyDirection.Minimize, TestSpace);
             var val = (double)result["float_param"];
             Assert.InRange(val, 0.0, 1.0);
         }
@@ -56,7 +56,7 @@ public sealed class RandomSamplerTests
         var sampler = new RandomSampler(seed: 42);
         for (var i = 0; i < 100; i++)
         {
-            var result = sampler.Sample([], StudyDirection.Minimize, TestSpace);
+            var result = sampler.Sample(new List<Trial>(), StudyDirection.Minimize, TestSpace);
             var val = (double)result["float_log"];
             Assert.InRange(val, 0.001, 1.0);
         }
@@ -69,7 +69,7 @@ public sealed class RandomSamplerTests
         var validChoices = new HashSet<object> { "a", "b", "c" };
         for (var i = 0; i < 100; i++)
         {
-            var result = sampler.Sample([], StudyDirection.Minimize, TestSpace);
+            var result = sampler.Sample(new List<Trial>(), StudyDirection.Minimize, TestSpace);
             Assert.Contains(result["cat_param"], validChoices);
         }
     }
@@ -82,8 +82,8 @@ public sealed class RandomSamplerTests
 
         for (var i = 0; i < 10; i++)
         {
-            var r1 = sampler1.Sample([], StudyDirection.Minimize, TestSpace);
-            var r2 = sampler2.Sample([], StudyDirection.Minimize, TestSpace);
+            var r1 = sampler1.Sample(new List<Trial>(), StudyDirection.Minimize, TestSpace);
+            var r2 = sampler2.Sample(new List<Trial>(), StudyDirection.Minimize, TestSpace);
 
             Assert.Equal(r1["int_param"], r2["int_param"]);
             Assert.Equal(r1["float_param"], r2["float_param"]);

@@ -5,16 +5,16 @@ namespace OptiSharp.Tests;
 
 public sealed class CmaEsSamplerTests
 {
-    private static readonly SearchSpace SimpleSpace = new([
+    private static readonly SearchSpace SimpleSpace = new(new ParameterRange[] {
         new FloatRange("x", 0, 10),
         new IntRange("n", 1, 5),
-        new CategoricalRange("cat", ["a", "b"])
-    ]);
+        new CategoricalRange("cat", new[] { "a", "b" })
+    });
 
-    private static readonly SearchSpace ContinuousOnly = new([
+    private static readonly SearchSpace ContinuousOnly = new(new ParameterRange[] {
         new FloatRange("x", -5, 5),
         new FloatRange("y", -5, 5)
-    ]);
+    });
 
     [Fact]
     public void Sample_FirstGeneration_ReturnsValidParams()
@@ -133,10 +133,10 @@ public sealed class CmaEsSamplerTests
     public void Sample_GenerationCycles_UpdatesMean()
     {
         // Use a space where optimum is at x=0, y=0
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new FloatRange("x", -10, 10),
             new FloatRange("y", -10, 10)
-        ]);
+        });
         var config = new CmaEsSamplerConfig { PopulationSize = 6, Seed = 42 };
         var sampler = new CmaEsSampler(config);
         var trials = new List<Trial>();
@@ -193,7 +193,7 @@ public sealed class CmaEsSamplerTests
     [Fact]
     public void Sample_MaximizeDirection_Works()
     {
-        var space = new SearchSpace([new FloatRange("x", 0, 10)]);
+        var space = new SearchSpace(new ParameterRange[] { new FloatRange("x", 0, 10) });
         var config = new CmaEsSamplerConfig { PopulationSize = 6, Seed = 42 };
         var sampler = new CmaEsSampler(config);
         var trials = new List<Trial>();
@@ -220,7 +220,7 @@ public sealed class CmaEsSamplerTests
     [Fact]
     public void Sample_LogScaleFloat_WithinBounds()
     {
-        var space = new SearchSpace([new FloatRange("lr", 0.0001, 1.0, Log: true)]);
+        var space = new SearchSpace(new ParameterRange[] { new FloatRange("lr", 0.0001, 1.0, Log: true) });
         var sampler = new CmaEsSampler(new CmaEsSamplerConfig { Seed = 42 });
         var trials = new List<Trial>();
 
@@ -242,7 +242,7 @@ public sealed class CmaEsSamplerTests
     [Fact]
     public void Sample_IntRangeWithStep_AlignsToStep()
     {
-        var space = new SearchSpace([new IntRange("n", 0, 100, Step: 10)]);
+        var space = new SearchSpace(new ParameterRange[] { new IntRange("n", 0, 100, Step: 10) });
         var sampler = new CmaEsSampler(new CmaEsSamplerConfig { Seed = 42 });
         var trials = new List<Trial>();
 
@@ -299,10 +299,10 @@ public sealed class CmaEsSamplerTests
     [Fact]
     public void Sample_CategoricalOnly_Throws()
     {
-        var space = new SearchSpace([new CategoricalRange("c", ["a", "b"])]);
+        var space = new SearchSpace(new ParameterRange[] { new CategoricalRange("c", new[] { "a", "b" }) });
         var sampler = new CmaEsSampler(new CmaEsSamplerConfig { Seed = 42 });
 
         Assert.Throws<ArgumentException>(() =>
-            sampler.Sample([], StudyDirection.Minimize, space));
+            sampler.Sample(new List<Trial>(), StudyDirection.Minimize, space));
     }
 }

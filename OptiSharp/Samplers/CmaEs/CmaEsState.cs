@@ -22,8 +22,12 @@ internal sealed class CmaEsState
 
     // Eigendecomposition cache
     private Matrix<double> _b;          // Eigenvectors
+    private Matrix<double> _bT;         // B^T (cached to avoid repeated transpose calls)
     private Vector<double> _d;          // Sqrt of eigenvalues
     private bool _eigenDirty = true;
+
+    // Scratch buffer for rank-mu computation (avoids Mu × OuterProduct allocations)
+    private readonly double[] _rankMuScratch; // N×N flat array for accumulation
 
     // Strategy constants (derived from n and lambda)
     public int N { get; }               // Dimension count
@@ -40,12 +44,16 @@ internal sealed class CmaEsState
 
     public int Generation { get; private set; }
 
+    // Function value history for stagnation detection
+    private readonly Queue<double> _bestValueHistory = new();
+
     public CmaEsState(int n, int lambda, double sigma, double[]? initialMean = null, GpuCmaEsProvider? gpu = null)
     {
         N = n;
         Lambda = lambda;
         _sigma = sigma;
         _gpu = gpu;
+        _rankMuScratch = new double[n * n]; // Pre-allocate scratch buffer for rank-mu accumulation
 
         // Initialize mean
         _mean = initialMean is not null
@@ -61,6 +69,7 @@ internal sealed class CmaEsState
 
         // Eigendecomposition of identity
         _b = DenseMatrix.CreateIdentity(n);
+        _bT = _b.Transpose(); // Cache transpose to avoid recomputing during updates
         _d = DenseVector.Create(n, 1.0);
         _eigenDirty = false;
 
@@ -167,6 +176,60 @@ internal sealed class CmaEsState
         Generation++;
     }
 
+    /// <summary>
+    /// Record the best function value seen in a completed generation.
+    /// Used for stagnation detection via TolFun criterion.
+    /// </summary>
+    public void RecordGenerationBest(double bestValue)
+    {
+        // Window size for TolFun stagnation detection (matches ShouldRestart window)
+        var window = Math.Max(8, 10 + N / 10);
+        _bestValueHistory.Enqueue(bestValue);
+        while (_bestValueHistory.Count > window)
+            _bestValueHistory.Dequeue();
+    }
+
+    /// <summary>
+    /// Returns true if the algorithm has stagnated and should restart.
+    /// Implements standard CMA-ES stopping criteria: TolFun, TolX, ConditionCov.
+    /// </summary>
+    /// <param name="initialSigma">The original sigma used when this state was created.</param>
+    public bool ShouldRestart(double initialSigma)
+    {
+        // TolX: step size has collapsed — distribution too narrow to make progress
+        if (_sigma < 1e-12 * initialSigma)
+            return true;
+
+        // ConditionCov: covariance matrix is numerically singular
+        if (ConditionNumber > 1e14)
+            return true;
+
+        // TolFun: function values show no improvement across recent generations
+        // Lowered window (from max(10+N/10, 20) to max(8, 10+N/10)) for earlier stagnation detection
+        var minHistory = Math.Max(8, 10 + N / 10);
+        if (_bestValueHistory.Count >= minHistory)
+        {
+            // Single pass over queue instead of ToArray + 3 LINQ passes
+            var min = double.PositiveInfinity;
+            var max = double.NegativeInfinity;
+            var sum = 0.0;
+            var count = 0;
+            foreach (var v in _bestValueHistory)
+            {
+                if (v < min) min = v;
+                if (v > max) max = v;
+                sum += v;
+                count++;
+            }
+            var range = max - min;
+            var reference = 1.0 + Math.Abs(sum / count);
+            if (range < 1e-11 * reference)
+                return true;
+        }
+
+        return false;
+    }
+
     // --- CPU paths ---
 
     private (Vector<double>[] Candidates, Vector<double>[] ZVectors) SamplePopulationCpu(Random rng)
@@ -187,13 +250,26 @@ internal sealed class CmaEsState
 
     private Matrix<double> ComputeRankMuCpu(Vector<double>[] rankedCandidates, Vector<double> oldMean)
     {
-        Matrix<double> rankMu = DenseMatrix.Create(N, N, 0.0);
+        // Clear scratch buffer
+        Array.Clear(_rankMuScratch, 0, N * N);
+
+        // Accumulate rank-mu using raw arithmetic instead of N×N OuterProduct allocs
         for (var i = 0; i < Mu; i++)
         {
-            var artmp = (rankedCandidates[i] - oldMean) / _sigma;
-            rankMu = rankMu + Weights[i] * artmp.OuterProduct(artmp);
+            // artmp = (x_i - oldMean) / sigma
+            for (var r = 0; r < N; r++)
+            {
+                var ar = (rankedCandidates[i][r] - oldMean[r]) / _sigma;
+                for (var c = 0; c < N; c++)
+                {
+                    var ac = (rankedCandidates[i][c] - oldMean[c]) / _sigma;
+                    _rankMuScratch[r * N + c] += Weights[i] * ar * ac;
+                }
+            }
         }
-        return rankMu;
+
+        // Construct final matrix from scratch buffer (single alloc, not Mu allocs)
+        return DenseMatrix.Create(N, N, (r, c) => _rankMuScratch[r * N + c]);
     }
 
     // --- GPU paths ---
@@ -276,6 +352,7 @@ internal sealed class CmaEsState
 
         var evd = _c.Evd(Symmetricity.Symmetric);
         _b = evd.EigenVectors;
+        _bT = _b.Transpose(); // Cache transpose computed once per eigen update
 
         // Eigenvalues: take sqrt, clamp negatives to small positive
         var eigenValues = evd.EigenValues;
@@ -288,9 +365,9 @@ internal sealed class CmaEsState
     private Matrix<double> ComputeCInvSqrt()
     {
         EnsureEigen();
-        // C^{-1/2} = B * D^{-1} * B^T
+        // C^{-1/2} = B * D^{-1} * B^T (use cached _bT to avoid redundant transpose)
         var dInv = DenseVector.Create(N, i => 1.0 / _d[i]);
-        return _b * DiagTimesMatrix(dInv, _b.Transpose());
+        return _b * DiagTimesMatrix(dInv, _bT);
     }
 
     private static Vector<double> DiagTimesVector(Vector<double> diag, Vector<double> vec)

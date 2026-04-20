@@ -26,9 +26,9 @@ public sealed class CoverageGap_SamplerTests
     [Fact]
     public void CmaEsSampler_CategoricalOnly_Throws()
     {
-        var space = new SearchSpace([
-            new CategoricalRange("c", ["a", "b", "c"])
-        ]);
+        var space = new SearchSpace(new ParameterRange[] {
+            new CategoricalRange("c", new[] { "a", "b", "c" })
+        });
         var sampler = new CmaEsSampler(new CmaEsSamplerConfig { Seed = 1 });
         using var study = Optimizer.CreateStudy("test", space, sampler);
 
@@ -60,9 +60,9 @@ public sealed class CoverageGap_SamplerTests
     [Fact]
     public void CmaEsSampler_IntRange_WithStep_Aligned()
     {
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new IntRange("n", 0, 100, Step: 10)
-        ]);
+        });
 
         using var study = Optimizer.CreateStudyWithCmaEs("test", space,
             config: new CmaEsSamplerConfig { Seed = 42 });
@@ -83,7 +83,7 @@ public sealed class CoverageGap_SamplerTests
     public void ParzenEstimator_LargeComponentCount_HeapAllocation()
     {
         // ParzenEstimator is internal, so test via TpeSampler with enough trials
-        var space = new SearchSpace([new FloatRange("x", 0, 10)]);
+        var space = new SearchSpace(new ParameterRange[] {new FloatRange("x", 0, 10)});
         using var study = Optimizer.CreateStudy("heap_test", space,
             config: new TpeSamplerConfig { NStartupTrials = 10, Seed = 42 });
 
@@ -106,7 +106,7 @@ public sealed class CoverageGap_SamplerTests
     public void LogSumExp_AllNegativeInfinity_ReturnsNegativeInfinity()
     {
         // This tests the IsNegativeInfinity(max) branch
-        ReadOnlySpan<double> values = [double.NegativeInfinity, double.NegativeInfinity];
+        ReadOnlySpan<double> values = new double[] {double.NegativeInfinity, double.NegativeInfinity};
         var result = TruncatedNormal.LogSumExp(values);
         Assert.True(double.IsNegativeInfinity(result));
     }
@@ -127,10 +127,10 @@ public sealed class CoverageGap_SamplerTests
     [Fact]
     public void TpeSampler_ConstantLiar_Disabled()
     {
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new FloatRange("x", 0, 10),
-            new CategoricalRange("c", ["a", "b", "c"])
-        ]);
+            new CategoricalRange("c", new[] { "a", "b", "c" })
+        });
 
         // ConstantLiar=false skips adding running trials to above group
         using var study = Optimizer.CreateStudy("test", space,
@@ -151,7 +151,7 @@ public sealed class CoverageGap_SamplerTests
     [Fact]
     public void TpeSampler_MagicClipDisabled()
     {
-        var space = new SearchSpace([new FloatRange("x", 0, 10)]);
+        var space = new SearchSpace(new ParameterRange[] {new FloatRange("x", 0, 10)});
         using var study = Optimizer.CreateStudy("test", space,
             config: new TpeSamplerConfig { NStartupTrials = 5, ConsiderMagicClip = false, Seed = 42 });
 

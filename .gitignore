@@ -57,3 +57,38 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 .DS_Store
+.temp
+dotnet-install.ps1
+
+## Memory management (local context only)
+.memory/
+
+## Git worktrees
+.worktrees/
+
+## Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+
+## Project-specific ignores
+memory.md
+optuna_wins.txt
+benchmark-results/
+OptiSharp.Benchmarks/
+docs/
+
+# Benchmark results and analysis
+benchmark-results/
+benchmark_detailed_comparison.md
+TempAnalyzer/
+BENCHMARK_DETAILED_COMPARISON.md
+AnalyzeMultivariate/
+analyze_multivariate.sh
+run_multivariate_test.sh
+test_multivariate_impact.sh
+*BENCHMARK_ANALYSIS*.txt

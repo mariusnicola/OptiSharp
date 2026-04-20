@@ -12,8 +12,15 @@ namespace OptiSharp.Tests;
 ///
 /// Results guide: use these benchmark outputs to decide CPU vs GPU for your search space size.
 /// </summary>
-public sealed class GpuBenchmarkTests(ITestOutputHelper output)
+public sealed class GpuBenchmarkTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public GpuBenchmarkTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
     // ----------------------------------------------------------------
     // Core benchmark: CPU vs GPU at different dimension counts
     // ----------------------------------------------------------------
@@ -25,21 +32,21 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
         var dims = new[] { 10, 20, 50, 100, 200, 500 };
         const int trialsPerConfig = 200;
 
-        output.WriteLine("╔══════════════════════════════════════════════════════════════════════════╗");
-        output.WriteLine("║              CMA-ES: CPU vs GPU Dimension Scaling                       ║");
-        output.WriteLine("║              Sphere function, 200 trials per config                     ║");
-        output.WriteLine("╚══════════════════════════════════════════════════════════════════════════╝");
-        output.WriteLine("");
+        _output.WriteLine("╔══════════════════════════════════════════════════════════════════════════╗");
+        _output.WriteLine("║              CMA-ES: CPU vs GPU Dimension Scaling                       ║");
+        _output.WriteLine("║              Sphere function, 200 trials per config                     ║");
+        _output.WriteLine("╚══════════════════════════════════════════════════════════════════════════╝");
+        _output.WriteLine("");
 
         if (!gpuAvailable)
         {
-            output.WriteLine("⚠ CUDA GPU not detected — showing CPU-only results.");
-            output.WriteLine("  To enable GPU comparison, ensure NVIDIA CUDA drivers are installed.");
-            output.WriteLine("");
+            _output.WriteLine("⚠ CUDA GPU not detected — showing CPU-only results.");
+            _output.WriteLine("  To enable GPU comparison, ensure NVIDIA CUDA drivers are installed.");
+            _output.WriteLine("");
         }
 
-        output.WriteLine($"{"Dims",-6} {"CPU ms/ask",-14} {"GPU ms/ask",-14} {"Speedup",-12} {"CPU best",-14} {"GPU best",-14} {"Verdict",-20}");
-        output.WriteLine(new string('-', 94));
+        _output.WriteLine($"{"Dims",-6} {"CPU ms/ask",-14} {"GPU ms/ask",-14} {"Speedup",-12} {"CPU best",-14} {"GPU best",-14} {"Verdict",-20}");
+        _output.WriteLine(new string('-', 94));
 
         foreach (var d in dims)
         {
@@ -62,19 +69,19 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
                     : speedup < 0.8 ? $"CPU {1.0 / speedup:F1}x faster"
                     : "~same";
 
-                output.WriteLine($"{d,-6} {cpuMs,-14:F3} {gpuMs,-14:F3} {speedup,-12:F2}x {cpuBest,-14:F4} {gpuBest,-14:F4} {verdict,-20}");
+                _output.WriteLine($"{d,-6} {cpuMs,-14:F3} {gpuMs,-14:F3} {speedup,-12:F2}x {cpuBest,-14:F4} {gpuBest,-14:F4} {verdict,-20}");
             }
             else
             {
-                output.WriteLine($"{d,-6} {cpuMs,-14:F3} {"N/A",-14} {"N/A",-12} {cpuBest,-14:F4} {"N/A",-14} {"GPU unavailable",-20}");
+                _output.WriteLine($"{d,-6} {cpuMs,-14:F3} {"N/A",-14} {"N/A",-12} {cpuBest,-14:F4} {"N/A",-14} {"GPU unavailable",-20}");
             }
         }
 
-        output.WriteLine("");
-        output.WriteLine("RECOMMENDATION:");
-        output.WriteLine($"  GPU recommended for N >= {CmaEsSampler.GpuRecommendedMinDimensions} continuous parameters.");
-        output.WriteLine("  Below that threshold, CPU is faster due to GPU kernel launch + PCIe transfer overhead.");
-        output.WriteLine("  The exact crossover depends on your GPU (kernel launch ~10-50μs, PCIe ~12 GB/s).");
+        _output.WriteLine("");
+        _output.WriteLine("RECOMMENDATION:");
+        _output.WriteLine($"  GPU recommended for N >= {CmaEsSampler.GpuRecommendedMinDimensions} continuous parameters.");
+        _output.WriteLine("  Below that threshold, CPU is faster due to GPU kernel launch + PCIe transfer overhead.");
+        _output.WriteLine("  The exact crossover depends on your GPU (kernel launch ~10-50μs, PCIe ~12 GB/s).");
     }
 
     // ----------------------------------------------------------------
@@ -87,7 +94,7 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
         var gpuAvailable = CheckGpuAvailable();
         if (!gpuAvailable)
         {
-            output.WriteLine("CUDA GPU not detected — skipping GPU correctness test.");
+            _output.WriteLine("CUDA GPU not detected — skipping GPU correctness test.");
             return;
         }
 
@@ -105,9 +112,9 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
             gpuBests[run] = RunCmaEsOpt(space, 20, trials, ComputeBackend.Gpu, seed);
         }
 
-        output.WriteLine("=== GPU Convergence Correctness — Sphere 20D ===");
-        output.WriteLine($"CPU median best: {TestHelpers.Median(cpuBests):F4}");
-        output.WriteLine($"GPU median best: {TestHelpers.Median(gpuBests):F4}");
+        _output.WriteLine("=== GPU Convergence Correctness — Sphere 20D ===");
+        _output.WriteLine($"CPU median best: {TestHelpers.Median(cpuBests):F4}");
+        _output.WriteLine($"GPU median best: {TestHelpers.Median(gpuBests):F4}");
 
         // GPU should converge comparably (not exact same due to floating point order)
         var cpuMedian = TestHelpers.Median(cpuBests);
@@ -126,7 +133,7 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
         var gpuAvailable = CheckGpuAvailable();
         if (!gpuAvailable)
         {
-            output.WriteLine("CUDA GPU not detected — skipping GPU warning test.");
+            _output.WriteLine("CUDA GPU not detected — skipping GPU warning test.");
             return;
         }
 
@@ -142,9 +149,9 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
         var sampler = TestHelpers.GetSamplerFromStudy(study);
         Assert.NotNull(sampler);
 
-        output.WriteLine($"GPU active: {sampler.IsGpuActive}");
-        output.WriteLine($"Device: {sampler.DeviceName}");
-        output.WriteLine($"Warning: {sampler.GpuDimensionWarning ?? "(none)"}");
+        _output.WriteLine($"GPU active: {sampler.IsGpuActive}");
+        _output.WriteLine($"Device: {sampler.DeviceName}");
+        _output.WriteLine($"Warning: {sampler.GpuDimensionWarning ?? "(none)"}");
 
         if (sampler.IsGpuActive)
         {
@@ -165,13 +172,13 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
         var dims = new[] { 20, 50, 100, 200, 500 };
         const int generations = 20;
 
-        output.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
-        output.WriteLine("║           CMA-ES Generation Timing (CPU vs GPU)                 ║");
-        output.WriteLine("║           Measures Ask+Tell per full generation cycle            ║");
-        output.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
-        output.WriteLine("");
-        output.WriteLine($"{"Dims",-6} {"CPU ms/gen",-14} {"GPU ms/gen",-14} {"Speedup",-12}");
-        output.WriteLine(new string('-', 46));
+        _output.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
+        _output.WriteLine("║           CMA-ES Generation Timing (CPU vs GPU)                 ║");
+        _output.WriteLine("║           Measures Ask+Tell per full generation cycle            ║");
+        _output.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
+        _output.WriteLine("");
+        _output.WriteLine($"{"Dims",-6} {"CPU ms/gen",-14} {"GPU ms/gen",-14} {"Speedup",-12}");
+        _output.WriteLine(new string('-', 46));
 
         foreach (var d in dims)
         {
@@ -183,18 +190,18 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
             {
                 var gpuGenMs = MeasureGenerationTime(space, d, generations, ComputeBackend.Gpu);
                 var speedup = cpuGenMs / gpuGenMs;
-                output.WriteLine($"{d,-6} {cpuGenMs,-14:F3} {gpuGenMs,-14:F3} {speedup,-12:F2}x");
+                _output.WriteLine($"{d,-6} {cpuGenMs,-14:F3} {gpuGenMs,-14:F3} {speedup,-12:F2}x");
             }
             else
             {
-                output.WriteLine($"{d,-6} {cpuGenMs,-14:F3} {"N/A",-14} {"N/A",-12}");
+                _output.WriteLine($"{d,-6} {cpuGenMs,-14:F3} {"N/A",-14} {"N/A",-12}");
             }
         }
 
         if (!gpuAvailable)
         {
-            output.WriteLine("");
-            output.WriteLine("⚠ CUDA GPU not detected — GPU columns show N/A.");
+            _output.WriteLine("");
+            _output.WriteLine("⚠ CUDA GPU not detected — GPU columns show N/A.");
         }
     }
 
@@ -208,7 +215,7 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
         var gpuAvailable = CheckGpuAvailable();
         if (!gpuAvailable)
         {
-            output.WriteLine("CUDA GPU not detected — skipping GPU memory test.");
+            _output.WriteLine("CUDA GPU not detected — skipping GPU memory test.");
             return;
         }
 
@@ -234,7 +241,7 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
         var memAfter = GC.GetTotalMemory(true);
 
         var usedMb = (memAfter - memBefore) / (1024.0 * 1024.0);
-        output.WriteLine($"GPU CMA-ES memory (1000 trials, 100 params): {usedMb:F1} MB");
+        _output.WriteLine($"GPU CMA-ES memory (1000 trials, 100 params): {usedMb:F1} MB");
         Assert.True(usedMb < 200, $"GPU memory: {usedMb:F1}MB — expected < 200MB");
     }
 
@@ -245,32 +252,32 @@ public sealed class GpuBenchmarkTests(ITestOutputHelper output)
     [Fact]
     public void ReferenceCard_WhenToUseGpu()
     {
-        output.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
-        output.WriteLine("║              CMA-ES Backend Selection Guide                     ║");
-        output.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
-        output.WriteLine("");
-        output.WriteLine("  Dimensions (N)  │  Recommended Backend  │  Reason");
-        output.WriteLine("  ────────────────┼───────────────────────┼──────────────────────────────");
-        output.WriteLine("  N < 50          │  CPU                  │  GPU overhead >> compute time");
-        output.WriteLine("  50 <= N < 100   │  CPU (usually)        │  GPU might break even");
-        output.WriteLine("  100 <= N < 200  │  Auto                 │  GPU starts to help");
-        output.WriteLine("  N >= 200        │  GPU                  │  GPU clearly faster");
-        output.WriteLine("  N >= 500        │  GPU                  │  GPU significantly faster");
-        output.WriteLine("");
-        output.WriteLine("  Config example:");
-        output.WriteLine("    new CmaEsSamplerConfig { Backend = ComputeBackend.Auto }");
-        output.WriteLine("");
-        output.WriteLine("  Auto mode: tries CUDA first, falls back to CPU silently.");
-        output.WriteLine("  GPU mode: throws if no CUDA device found.");
-        output.WriteLine("");
-        output.WriteLine($"  Warning threshold: N < {CmaEsSampler.GpuRecommendedMinDimensions} " +
+        _output.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
+        _output.WriteLine("║              CMA-ES Backend Selection Guide                     ║");
+        _output.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
+        _output.WriteLine("");
+        _output.WriteLine("  Dimensions (N)  │  Recommended Backend  │  Reason");
+        _output.WriteLine("  ────────────────┼───────────────────────┼──────────────────────────────");
+        _output.WriteLine("  N < 50          │  CPU                  │  GPU overhead >> compute time");
+        _output.WriteLine("  50 <= N < 100   │  CPU (usually)        │  GPU might break even");
+        _output.WriteLine("  100 <= N < 200  │  Auto                 │  GPU starts to help");
+        _output.WriteLine("  N >= 200        │  GPU                  │  GPU clearly faster");
+        _output.WriteLine("  N >= 500        │  GPU                  │  GPU significantly faster");
+        _output.WriteLine("");
+        _output.WriteLine("  Config example:");
+        _output.WriteLine("    new CmaEsSamplerConfig { Backend = ComputeBackend.Auto }");
+        _output.WriteLine("");
+        _output.WriteLine("  Auto mode: tries CUDA first, falls back to CPU silently.");
+        _output.WriteLine("  GPU mode: throws if no CUDA device found.");
+        _output.WriteLine("");
+        _output.WriteLine($"  Warning threshold: N < {CmaEsSampler.GpuRecommendedMinDimensions} " +
                           "will emit GpuDimensionWarning on the sampler.");
-        output.WriteLine("");
-        output.WriteLine("  Key factors affecting crossover point:");
-        output.WriteLine("    - GPU kernel launch overhead: ~10-50μs");
-        output.WriteLine("    - PCIe transfer: ~12 GB/s (RTX 3090)");
-        output.WriteLine("    - CMA-ES compute: O(lambda * N²) per generation");
-        output.WriteLine("    - Eigendecomposition: O(N³) — always on CPU (MathNet.Numerics)");
+        _output.WriteLine("");
+        _output.WriteLine("  Key factors affecting crossover point:");
+        _output.WriteLine("    - GPU kernel launch overhead: ~10-50μs");
+        _output.WriteLine("    - PCIe transfer: ~12 GB/s (RTX 3090)");
+        _output.WriteLine("    - CMA-ES compute: O(lambda * N²) per generation");
+        _output.WriteLine("    - Eigendecomposition: O(N³) — always on CPU (MathNet.Numerics)");
 
         // Just ensure this test runs — it's a documentation test
         Assert.True(true);

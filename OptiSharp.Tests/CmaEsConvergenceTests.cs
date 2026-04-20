@@ -10,7 +10,7 @@ public sealed class CmaEsConvergenceTests
     public void CmaEs_Quadratic_BeatRandom()
     {
         // f(x) = (x - 3)^2, optimum at x=3
-        var space = new SearchSpace([new FloatRange("x", 0, 10)]);
+        var space = new SearchSpace(new ParameterRange[] {new FloatRange("x", 0, 10)});
         var cmaWins = 0;
         var runs = 10;
 
@@ -63,7 +63,7 @@ public sealed class CmaEsConvergenceTests
     {
         // f(x,y) = (1-x)^2 + 100(y-x^2)^2, optimum at (1,1)
         // CMA-ES should excel here — handles the correlated narrow valley
-        var space = new SearchSpace([new FloatRange("x", -2, 2), new FloatRange("y", -2, 2)]);
+        var space = new SearchSpace(new ParameterRange[] {new FloatRange("x", -2, 2), new FloatRange("y", -2, 2)});
         var cmaWins = 0;
         var runs = 8;
 
@@ -124,11 +124,11 @@ public sealed class CmaEsConvergenceTests
     public void CmaEs_MixedSpace_HandlesCategorials()
     {
         // Mixed: int + float + categorical
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new IntRange("a", 0, 10),
             new FloatRange("b", -5, 5),
-            new CategoricalRange("d", [1.0, 2.0, 3.0])
-        ]);
+            new CategoricalRange("d", new object[] { 1.0, 2.0, 3.0 })
+        });
 
         var cmaWins = 0;
         var runs = 8;

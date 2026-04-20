@@ -26,9 +26,15 @@ public sealed class CmaEsSampler : ISampler, IDisposable
     private int _continuousDimCount;
 
     // Generation management
-    private readonly List<(int TrialNumber, Vector<double> Candidate)> _currentGeneration = [];
+    private readonly List<(int TrialNumber, Vector<double> Candidate)> _currentGeneration = new();
     private int _issuedCount;
     private Vector<double>[]? _population;
+
+    // IPOP restart tracking
+    private int _restartCount;
+    private int _currentLambda;
+    private double _initialSigmaValue;
+    private int _totalCompletedTrials;
 
     // Parameter mapping (order-sensitive — maps to vector indices)
     private string[]? _continuousParamNames;
@@ -165,6 +171,8 @@ public sealed class CmaEsSampler : ISampler, IDisposable
             var lambda = _config.PopulationSize
                 ?? 4 + (int)Math.Floor(3.0 * Math.Log(_continuousDimCount));
 
+            _initialSigmaValue = sigma;
+            _currentLambda = lambda;
             _state = new CmaEsState(_continuousDimCount, lambda, sigma, initialMean, _gpu);
         }
         catch
@@ -192,10 +200,15 @@ public sealed class CmaEsSampler : ISampler, IDisposable
             {
                 results.Add((trial.Value.Value, candidate));
             }
-            else if (trial.State is TrialState.Fail)
+            else if (trial.State == TrialState.Fail)
             {
                 var worstValue = direction == StudyDirection.Minimize ? double.MaxValue : double.MinValue;
                 results.Add((worstValue, candidate));
+            }
+            else if (trial.State == TrialState.Pruned)
+            {
+                // Skip pruned trials — don't use MaxValue which distorts the update.
+                // Matches Optuna's consider_pruned_trials=False default behavior.
             }
             else
             {
@@ -203,7 +216,18 @@ public sealed class CmaEsSampler : ISampler, IDisposable
             }
         }
 
-        // All done — sort by fitness (best first) and update
+        // Only update if we have enough complete trials for a meaningful update (at least Mu).
+        // If most trials were pruned and we have fewer than Mu complete, skip and reset —
+        // CMA-ES will continue sampling from the current distribution.
+        if (results.Count < _state.Mu)
+        {
+            _currentGeneration.Clear();
+            _population = null;
+            _issuedCount = 0;
+            return;
+        }
+
+        // Sort by fitness (best first) and update with available complete trials
         if (direction == StudyDirection.Minimize)
             results.Sort((a, b) => a.Value.CompareTo(b.Value));
         else
@@ -213,6 +237,7 @@ public sealed class CmaEsSampler : ISampler, IDisposable
         _state.Update(ranked);
 
         // Update metrics
+        _totalCompletedTrials += results.Count;
         var bestInGen = direction == StudyDirection.Minimize
             ? results.Min(r => r.Value)
             : results.Max(r => r.Value);
@@ -223,10 +248,37 @@ public sealed class CmaEsSampler : ISampler, IDisposable
             Sigma = _state.Sigma,
             ConditionNumber = _state.ConditionNumber,
             BestValue = bestInGen,
-            EvaluatedTrials = trials.Count(t => t.State == TrialState.Complete)
+            EvaluatedTrials = _totalCompletedTrials,
+            RestartCount = _restartCount
         };
 
+        // IPOP: check for stagnation and restart with doubled population if needed
+        _state.RecordGenerationBest(bestInGen);
+        if (_config.RestartOnStagnation
+            && _restartCount < _config.MaxRestarts
+            && _state.ShouldRestart(_initialSigmaValue))
+        {
+            PerformRestart();
+            return;
+        }
+
         // Reset for next generation
+        _currentGeneration.Clear();
+        _population = null;
+        _issuedCount = 0;
+    }
+
+    private void PerformRestart()
+    {
+        _restartCount++;
+        _currentLambda *= _config.IncPopSize;
+
+        // Restart from a random position in the search space for better exploration
+        var restartMean = new double[_continuousDimCount];
+        for (var i = 0; i < _continuousDimCount; i++)
+            restartMean[i] = _lows![i] + _rng.NextDouble() * (_highs![i] - _lows[i]);
+
+        _state = new CmaEsState(_continuousDimCount, _currentLambda, _initialSigmaValue, restartMean, _gpu);
         _currentGeneration.Clear();
         _population = null;
         _issuedCount = 0;
@@ -307,4 +359,5 @@ public sealed record CmaEsMetrics
     public double ConditionNumber { get; init; }
     public double BestValue { get; init; }
     public int EvaluatedTrials { get; init; }
+    public int RestartCount { get; init; }
 }
