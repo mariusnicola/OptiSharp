@@ -70,14 +70,14 @@ public sealed class TruncatedNormalTests
     [Fact]
     public void LogSumExp_SingleValue_ReturnsSame()
     {
-        ReadOnlySpan<double> values = [3.5];
+        ReadOnlySpan<double> values = new double[] {3.5};
         Assert.Equal(3.5, TruncatedNormal.LogSumExp(values), precision: 10);
     }
 
     [Fact]
     public void LogSumExp_TwoValues_Correct()
     {
-        ReadOnlySpan<double> values = [1.0, 2.0];
+        ReadOnlySpan<double> values = new double[] {1.0, 2.0};
         var expected = Math.Log(Math.Exp(1.0) + Math.Exp(2.0));
         Assert.Equal(expected, TruncatedNormal.LogSumExp(values), precision: 10);
     }
@@ -85,7 +85,7 @@ public sealed class TruncatedNormalTests
     [Fact]
     public void LogSumExp_LargeValues_NoOverflow()
     {
-        ReadOnlySpan<double> values = [1000, 1001, 999];
+        ReadOnlySpan<double> values = new double[] {1000, 1001, 999};
         var result = TruncatedNormal.LogSumExp(values);
         Assert.True(double.IsFinite(result));
         Assert.True(result > 1000);

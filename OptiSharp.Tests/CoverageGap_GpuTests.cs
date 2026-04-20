@@ -96,10 +96,10 @@ public sealed class CoverageGap_GpuTests
     [GpuFact]
     public void CmaEsSampler_LogScale_WithGpu()
     {
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new FloatRange("lr", 0.0001, 1.0, Log: true),
             new FloatRange("wd", 1e-6, 1e-2, Log: true)
-        ]);
+        });
 
         using var study = Optimizer.CreateStudyWithCmaEs("gpu_log", space,
             config: new CmaEsSamplerConfig { Seed = 42, Backend = ComputeBackend.Gpu });

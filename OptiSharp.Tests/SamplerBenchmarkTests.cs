@@ -12,8 +12,15 @@ namespace OptiSharp.Tests;
 /// All tests use standard optimization test functions — no external dependency.
 /// Output goes to ITestOutputHelper for human-readable comparison tables.
 /// </summary>
-public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
+public sealed class SamplerBenchmarkTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public SamplerBenchmarkTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
     // --- Convergence benchmarks ---
 
     [Fact]
@@ -42,10 +49,10 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
             if (cmaBests[run] < rndBests[run]) cmaWins++;
         }
 
-        output.WriteLine("=== Sphere 5D (200 trials, 8 runs) ===");
-        output.WriteLine($"TPE    median best: {TestHelpers.Median(tpeBests):F4}  wins vs random: {tpeWins}/{runs}");
-        output.WriteLine($"CMA-ES median best: {TestHelpers.Median(cmaBests):F4}  wins vs random: {cmaWins}/{runs}");
-        output.WriteLine($"Random median best: {TestHelpers.Median(rndBests):F4}");
+        _output.WriteLine("=== Sphere 5D (200 trials, 8 runs) ===");
+        _output.WriteLine($"TPE    median best: {TestHelpers.Median(tpeBests):F4}  wins vs random: {tpeWins}/{runs}");
+        _output.WriteLine($"CMA-ES median best: {TestHelpers.Median(cmaBests):F4}  wins vs random: {cmaWins}/{runs}");
+        _output.WriteLine($"Random median best: {TestHelpers.Median(rndBests):F4}");
 
         Assert.True(cmaWins >= 4, $"CMA-ES won {cmaWins}/{runs} vs random — expected >= 4");
         Assert.True(tpeWins >= 4, $"TPE won {tpeWins}/{runs} vs random — expected >= 4");
@@ -77,10 +84,10 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
             if (cmaBests[run] < rndBests[run]) cmaWins++;
         }
 
-        output.WriteLine("=== Rosenbrock 2D (200 trials, 8 runs) ===");
-        output.WriteLine($"TPE    median best: {TestHelpers.Median(tpeBests):F4}  wins vs random: {tpeWins}/{runs}");
-        output.WriteLine($"CMA-ES median best: {TestHelpers.Median(cmaBests):F4}  wins vs random: {cmaWins}/{runs}");
-        output.WriteLine($"Random median best: {TestHelpers.Median(rndBests):F4}");
+        _output.WriteLine("=== Rosenbrock 2D (200 trials, 8 runs) ===");
+        _output.WriteLine($"TPE    median best: {TestHelpers.Median(tpeBests):F4}  wins vs random: {tpeWins}/{runs}");
+        _output.WriteLine($"CMA-ES median best: {TestHelpers.Median(cmaBests):F4}  wins vs random: {cmaWins}/{runs}");
+        _output.WriteLine($"Random median best: {TestHelpers.Median(rndBests):F4}");
 
         Assert.True(cmaWins >= 4, $"CMA-ES won {cmaWins}/{runs} vs random — expected >= 4");
     }
@@ -106,10 +113,10 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
             rndBests[run] = RunOpt(new RandomSampler(seed), space, trials, p => TestHelpers.Rastrigin(p, 5));
         }
 
-        output.WriteLine("=== Rastrigin 5D (300 trials, 8 runs) ===");
-        output.WriteLine($"TPE    median best: {TestHelpers.Median(tpeBests):F4}");
-        output.WriteLine($"CMA-ES median best: {TestHelpers.Median(cmaBests):F4}");
-        output.WriteLine($"Random median best: {TestHelpers.Median(rndBests):F4}");
+        _output.WriteLine("=== Rastrigin 5D (300 trials, 8 runs) ===");
+        _output.WriteLine($"TPE    median best: {TestHelpers.Median(tpeBests):F4}");
+        _output.WriteLine($"CMA-ES median best: {TestHelpers.Median(cmaBests):F4}");
+        _output.WriteLine($"Random median best: {TestHelpers.Median(rndBests):F4}");
 
         // Rastrigin is multimodal — neither TPE nor CMA-ES guaranteed to dominate
         // Just report results, no strict assertion
@@ -137,10 +144,10 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
             rndBests[run] = RunOpt(new RandomSampler(seed), space, trials, p => TestHelpers.Ackley(p, 5));
         }
 
-        output.WriteLine("=== Ackley 5D (200 trials, 8 runs) ===");
-        output.WriteLine($"TPE    median best: {TestHelpers.Median(tpeBests):F4}");
-        output.WriteLine($"CMA-ES median best: {TestHelpers.Median(cmaBests):F4}");
-        output.WriteLine($"Random median best: {TestHelpers.Median(rndBests):F4}");
+        _output.WriteLine("=== Ackley 5D (200 trials, 8 runs) ===");
+        _output.WriteLine($"TPE    median best: {TestHelpers.Median(tpeBests):F4}");
+        _output.WriteLine($"CMA-ES median best: {TestHelpers.Median(cmaBests):F4}");
+        _output.WriteLine($"Random median best: {TestHelpers.Median(rndBests):F4}");
     }
 
     // --- Wall-clock time benchmarks ---
@@ -159,9 +166,9 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
             () => new CmaEsSampler(new CmaEsSamplerConfig { Seed = 42 }),
             space, prefill, measure);
 
-        output.WriteLine("=== Ask() latency — 10 params, 100 prior trials ===");
-        output.WriteLine($"TPE:    {tpeMs:F3} ms/ask");
-        output.WriteLine($"CMA-ES: {cmaMs:F3} ms/ask");
+        _output.WriteLine("=== Ask() latency — 10 params, 100 prior trials ===");
+        _output.WriteLine($"TPE:    {tpeMs:F3} ms/ask");
+        _output.WriteLine($"CMA-ES: {cmaMs:F3} ms/ask");
 
         Assert.True(tpeMs < 50, $"TPE: {tpeMs:F2}ms — expected < 50ms");
         Assert.True(cmaMs < 50, $"CMA-ES: {cmaMs:F2}ms — expected < 50ms");
@@ -181,9 +188,9 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
             () => new CmaEsSampler(new CmaEsSamplerConfig { Seed = 42 }),
             space, prefill, measure);
 
-        output.WriteLine("=== Ask() latency — 50 params, 300 prior trials ===");
-        output.WriteLine($"TPE:    {tpeMs:F3} ms/ask");
-        output.WriteLine($"CMA-ES: {cmaMs:F3} ms/ask");
+        _output.WriteLine("=== Ask() latency — 50 params, 300 prior trials ===");
+        _output.WriteLine($"TPE:    {tpeMs:F3} ms/ask");
+        _output.WriteLine($"CMA-ES: {cmaMs:F3} ms/ask");
 
         Assert.True(tpeMs < 100, $"TPE: {tpeMs:F2}ms — expected < 100ms");
         Assert.True(cmaMs < 100, $"CMA-ES: {cmaMs:F2}ms — expected < 100ms");
@@ -197,8 +204,8 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
         var dims = new[] { 5, 10, 20, 50 };
         const int trials = 200;
 
-        output.WriteLine("=== Dimension scaling (Sphere, 200 trials) ===");
-        output.WriteLine($"{"Dims",-6} {"TPE best",-14} {"CMA best",-14} {"TPE ms/ask",-14} {"CMA ms/ask",-14}");
+        _output.WriteLine("=== Dimension scaling (Sphere, 200 trials) ===");
+        _output.WriteLine($"{"Dims",-6} {"TPE best",-14} {"CMA best",-14} {"TPE ms/ask",-14} {"CMA ms/ask",-14}");
 
         foreach (var d in dims)
         {
@@ -211,7 +218,7 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
                 new CmaEsSampler(new CmaEsSamplerConfig { Seed = 42 }),
                 space, trials, p => TestHelpers.Sphere(p, d));
 
-            output.WriteLine($"{d,-6} {tpeBest,-14:F4} {cmaBest,-14:F4} {tpeMs,-14:F3} {cmaMs,-14:F3}");
+            _output.WriteLine($"{d,-6} {tpeBest,-14:F4} {cmaBest,-14:F4} {tpeMs,-14:F3} {cmaMs,-14:F3}");
         }
     }
 
@@ -224,8 +231,8 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
         const int dims = 20;
         var space = TestHelpers.MakeSpace(dims);
 
-        output.WriteLine("=== Trial scaling (Sphere 20D) ===");
-        output.WriteLine($"{"Trials",-8} {"TPE best",-14} {"CMA best",-14} {"TPE ms/ask",-14} {"CMA ms/ask",-14}");
+        _output.WriteLine("=== Trial scaling (Sphere 20D) ===");
+        _output.WriteLine($"{"Trials",-8} {"TPE best",-14} {"CMA best",-14} {"TPE ms/ask",-14} {"CMA ms/ask",-14}");
 
         foreach (var n in trialCounts)
         {
@@ -236,7 +243,7 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
                 new CmaEsSampler(new CmaEsSamplerConfig { Seed = 42 }),
                 space, n, p => TestHelpers.Sphere(p, dims));
 
-            output.WriteLine($"{n,-8} {tpeBest,-14:F4} {cmaBest,-14:F4} {tpeMs,-14:F3} {cmaMs,-14:F3}");
+            _output.WriteLine($"{n,-8} {tpeBest,-14:F4} {cmaBest,-14:F4} {tpeMs,-14:F3} {cmaMs,-14:F3}");
         }
     }
 
@@ -266,7 +273,7 @@ public sealed class SamplerBenchmarkTests(ITestOutputHelper output)
         var memAfter = GC.GetTotalMemory(true);
 
         var usedMb = (memAfter - memBefore) / (1024.0 * 1024.0);
-        output.WriteLine($"CMA-ES memory (2000 trials, 20 params): {usedMb:F1} MB");
+        _output.WriteLine($"CMA-ES memory (2000 trials, 20 params): {usedMb:F1} MB");
         Assert.True(usedMb < 100, $"Memory: {usedMb:F1}MB — expected < 100MB");
     }
 

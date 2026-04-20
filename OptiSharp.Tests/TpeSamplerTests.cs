@@ -5,11 +5,11 @@ namespace OptiSharp.Tests;
 
 public sealed class TpeSamplerTests
 {
-    private static readonly SearchSpace SimpleSpace = new([
+    private static readonly SearchSpace SimpleSpace = new(new ParameterRange[] {
         new FloatRange("x", 0, 10),
         new IntRange("n", 1, 5),
-        new CategoricalRange("cat", ["a", "b"])
-    ]);
+        new CategoricalRange("cat", new[] { "a", "b" })
+    });
 
     private static List<Trial> CreateCompletedTrials(int count, SearchSpace space, int seed = 42)
     {
@@ -102,7 +102,7 @@ public sealed class TpeSamplerTests
     [Fact]
     public void Sample_FloatLogRange_ReturnsPositive()
     {
-        var space = new SearchSpace([new FloatRange("lr", 0.0001, 1.0, Log: true)]);
+        var space = new SearchSpace(new ParameterRange[] { new FloatRange("lr", 0.0001, 1.0, Log: true) });
         var config = new TpeSamplerConfig { NStartupTrials = 10, Seed = 42 };
         var sampler = new TpeSampler(config);
 

@@ -7,7 +7,7 @@ public sealed class CategoricalEstimatorTests
     [Fact]
     public void Fit_UniformObservations_NearUniformWeights()
     {
-        ReadOnlySpan<int> observations = [0, 1, 2, 0, 1, 2];
+        ReadOnlySpan<int> observations = new int[] {0, 1, 2, 0, 1, 2};
         var est = new CategoricalEstimator(observations, 3, priorWeight: 0.01);
 
         // All categories equally observed — log pdfs should be similar
@@ -20,7 +20,7 @@ public sealed class CategoricalEstimatorTests
     [Fact]
     public void Fit_SingleCategory_Dominates()
     {
-        ReadOnlySpan<int> observations = [0, 0, 0, 0, 0];
+        ReadOnlySpan<int> observations = new int[] {0, 0, 0, 0, 0};
         var est = new CategoricalEstimator(observations, 3, priorWeight: 1.0);
 
         Assert.True(est.LogPdf(0) > est.LogPdf(1));
@@ -30,7 +30,7 @@ public sealed class CategoricalEstimatorTests
     [Fact]
     public void Fit_PriorPreventsZeroProbability()
     {
-        ReadOnlySpan<int> observations = [0, 0, 0];
+        ReadOnlySpan<int> observations = new int[] {0, 0, 0};
         var est = new CategoricalEstimator(observations, 3, priorWeight: 1.0);
 
         // Unobserved categories should still have non-zero probability
@@ -41,7 +41,7 @@ public sealed class CategoricalEstimatorTests
     [Fact]
     public void Sample_RespectsWeights_1000Samples()
     {
-        ReadOnlySpan<int> observations = [0, 0, 0, 0, 1];
+        ReadOnlySpan<int> observations = new int[] {0, 0, 0, 0, 1};
         var est = new CategoricalEstimator(observations, 3, priorWeight: 0.01);
         var rng = new Random(42);
 
@@ -57,7 +57,7 @@ public sealed class CategoricalEstimatorTests
     [Fact]
     public void LogPdf_ProbabilitiesSumToOne()
     {
-        ReadOnlySpan<int> observations = [0, 1, 2, 1];
+        ReadOnlySpan<int> observations = new int[] {0, 1, 2, 1};
         var est = new CategoricalEstimator(observations, 3, priorWeight: 1.0);
 
         var sum = Math.Exp(est.LogPdf(0)) + Math.Exp(est.LogPdf(1)) + Math.Exp(est.LogPdf(2));

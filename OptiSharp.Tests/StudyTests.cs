@@ -5,9 +5,9 @@ namespace OptiSharp.Tests;
 
 public sealed class StudyTests
 {
-    private static readonly SearchSpace SimpleSpace = new([
+    private static readonly SearchSpace SimpleSpace = new(new ParameterRange[] {
         new FloatRange("x", 0, 10)
-    ]);
+    });
 
     [Fact]
     public void Ask_ReturnsRunningTrial()

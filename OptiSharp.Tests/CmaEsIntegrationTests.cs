@@ -36,10 +36,10 @@ public sealed class CmaEsIntegrationTests
     [Fact]
     public void EndToEnd_BatchWorkflow()
     {
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new FloatRange("x", -10, 10),
             new FloatRange("y", -10, 10)
-        ]);
+        });
 
         var config = new CmaEsSamplerConfig { PopulationSize = 10, Seed = 42 };
         using var study = Optimizer.CreateStudyWithCmaEs("e2e_batch_cma", space, config: config);
@@ -74,7 +74,7 @@ public sealed class CmaEsIntegrationTests
     [Fact]
     public void EndToEnd_FailedTrials_Handled()
     {
-        var space = new SearchSpace([new FloatRange("x", 0, 10)]);
+        var space = new SearchSpace(new ParameterRange[] {new FloatRange("x", 0, 10)});
         var config = new CmaEsSamplerConfig { PopulationSize = 6, Seed = 42 };
         using var study = Optimizer.CreateStudyWithCmaEs("e2e_fail_cma", space, config: config);
 
@@ -105,7 +105,7 @@ public sealed class CmaEsIntegrationTests
     [Fact]
     public void EndToEnd_Maximize_Direction()
     {
-        var space = new SearchSpace([new FloatRange("x", 0, 10)]);
+        var space = new SearchSpace(new ParameterRange[] {new FloatRange("x", 0, 10)});
         var config = new CmaEsSamplerConfig { PopulationSize = 6, Seed = 42 };
         using var study = Optimizer.CreateStudyWithCmaEs("e2e_max_cma", space,
             direction: StudyDirection.Maximize, config: config);
@@ -124,10 +124,10 @@ public sealed class CmaEsIntegrationTests
     [Fact]
     public void EndToEnd_LogScaleParameters()
     {
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new FloatRange("lr", 0.0001, 1.0, Log: true),
             new FloatRange("wd", 1e-6, 1e-2, Log: true)
-        ]);
+        });
 
         var config = new CmaEsSamplerConfig { Seed = 42 };
         using var study = Optimizer.CreateStudyWithCmaEs("e2e_log_cma", space, config: config);

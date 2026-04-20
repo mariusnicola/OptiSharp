@@ -15,7 +15,7 @@ public sealed class IntegrationTests
         for (var i = 0; i < 5; i++)
             ranges.Add(new IntRange($"i{i}", 0, 100));
         for (var i = 0; i < 2; i++)
-            ranges.Add(new CategoricalRange($"c{i}", ["a", "b", "c"]));
+            ranges.Add(new CategoricalRange($"c{i}", new[] { "a", "b", "c" }));
         var space = new SearchSpace(ranges);
 
         // Create study
@@ -47,12 +47,12 @@ public sealed class IntegrationTests
     [Fact]
     public void EndToEnd_BatchWorkflow()
     {
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new FloatRange("x", -10, 10),
             new FloatRange("y", -10, 10),
             new IntRange("n", 1, 20),
-            new CategoricalRange("mode", ["fast", "slow", "balanced"])
-        ]);
+            new CategoricalRange("mode", new[] { "fast", "slow", "balanced" })
+        });
 
         using var study = Optimizer.CreateStudy("e2e_batch", space,
             config: new TpeSamplerConfig { NStartupTrials = 10, Seed = 42 });
@@ -92,7 +92,7 @@ public sealed class IntegrationTests
     [Fact]
     public void EndToEnd_FailedTrials_Handled()
     {
-        var space = new SearchSpace([new FloatRange("x", 0, 10)]);
+        var space = new SearchSpace(new ParameterRange[] {new FloatRange("x", 0, 10)});
         using var study = Optimizer.CreateStudy("e2e_fail", space,
             config: new TpeSamplerConfig { NStartupTrials = 5, Seed = 42 });
 
@@ -125,7 +125,7 @@ public sealed class IntegrationTests
     [Fact]
     public void EndToEnd_Maximize_Direction()
     {
-        var space = new SearchSpace([new FloatRange("x", 0, 10)]);
+        var space = new SearchSpace(new ParameterRange[] {new FloatRange("x", 0, 10)});
         using var study = Optimizer.CreateStudy("e2e_max", space,
             direction: StudyDirection.Maximize,
             config: new TpeSamplerConfig { NStartupTrials = 10, Seed = 42 });
@@ -145,11 +145,11 @@ public sealed class IntegrationTests
     [Fact]
     public void EndToEnd_RandomSampler()
     {
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new FloatRange("x", -5, 5),
             new IntRange("n", 0, 10),
-            new CategoricalRange("c", ["a", "b"])
-        ]);
+            new CategoricalRange("c", new[] { "a", "b" })
+        });
 
         using var study = Optimizer.CreateStudyWithRandomSampler("e2e_random", space, seed: 42);
 
@@ -170,10 +170,10 @@ public sealed class IntegrationTests
     [Fact]
     public void EndToEnd_LogScaleParameters()
     {
-        var space = new SearchSpace([
+        var space = new SearchSpace(new ParameterRange[] {
             new FloatRange("lr", 0.0001, 1.0, Log: true),
             new FloatRange("weight_decay", 1e-6, 1e-2, Log: true)
-        ]);
+        });
 
         using var study = Optimizer.CreateStudy("e2e_log", space,
             config: new TpeSamplerConfig { NStartupTrials = 10, Seed = 42 });
